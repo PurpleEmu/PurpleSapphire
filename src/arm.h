@@ -66,7 +66,8 @@ struct arm_cpu
     u32 rw(u32 addr);
     void ww(u32 addr, u32 data);
 
-    u32 getloadstoreaddr(u32 opcode);
+    u32 get_load_store_addr(u32 opcode);
+    u32 get_load_store_multi_addr(u32 opcode);
     u32 get_shift_operand(u32 opcode, bool s);
 
     void tick();

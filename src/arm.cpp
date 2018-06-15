@@ -45,7 +45,7 @@ void arm_cpu::ww(u32 addr, u32 data)
     ww_real(device, addr, data);
 }
 
-u32 arm_cpu::getloadstoreaddr(u32 opcode)
+u32 arm_cpu::get_load_store_addr(u32 opcode)
 {
     int rn = (opcode >> 16) & 0xf;
     bool w = (opcode >> 21) & 1;
@@ -109,6 +109,33 @@ u32 arm_cpu::getloadstoreaddr(u32 opcode)
     if(rn == 15) addr += 8;
 
     cpsr.mode = oldmode;
+    return addr;
+}
+
+u32 arm_cpu::get_load_store_multi_addr(u32 opcode)
+{
+    u16 reg_list = opcode & 0xffff;
+    int rn = (opcode >> 16) & 0xf;
+    bool w = (opcode >> 21) & 1;
+    bool u = (opcode >> 23) & 1;
+    bool p = (opcode >> 24) & 1;
+
+    u32 count = 0;
+    for(int i = 0; i < 16; i++)
+    {
+        if(reg_list & (1 << i)) count += 4;
+    }
+
+    u32 addr;
+    if(u) addr = r[rn] + (p << 2);
+    else addr = r[rn] - count + ((!p) << 2);
+
+    if(w)
+    {
+        if(u) r[rn] += count;
+        else r[rn] -= count;
+    }
+
     return addr;
 }
 
@@ -888,7 +915,7 @@ void arm_cpu::tick()
                         {
                             printf("LDR\n");
                             int rd = (opcode >> 12) & 0xf;
-                            u32 addr = getloadstoreaddr(opcode);
+                            u32 addr = get_load_store_addr(opcode);
                             u32 data = rw(addr & 0xfffffffc);
                             if(!cp15.control.unaligned_access_enable)
                             {
@@ -918,7 +945,7 @@ void arm_cpu::tick()
                         {
                             printf("STR\n");
                             int rd = (opcode >> 12) & 0xf;
-                            u32 addr = getloadstoreaddr(opcode);
+                            u32 addr = get_load_store_addr(opcode);
                             u32 data = rw(addr);
                             ww(addr, r[rd]);
                         }
@@ -928,8 +955,88 @@ void arm_cpu::tick()
             }
             case 4:
             {
-                if((opcode >> 20) & 1) printf("LDM\n");
-                else printf("STM\n");
+                if((opcode >> 20) & 1)
+                {
+                    printf("LDM\n");
+                    u16 reg_list = opcode & 0xffff;
+                    bool pc = reg_list & 0x8000;
+                    int rn = (opcode >> 16) & 0xf;
+                    bool w = (opcode >> 21) & 1;
+                    bool s = (opcode >> 22) & 1;
+
+                    arm_mode oldmode = cpsr.mode;
+                    if(s && !pc) cpsr.mode = arm_mode::user;
+                    u32 addr = get_load_store_multi_addr(opcode) & 0xfffffffc;
+                    for(int i = 0; i < 15; i++)
+                    {
+                        if(reg_list & (1 << i))
+                        {
+                            r[i] = rw(addr);
+                            addr += 4;
+                        }
+                    }
+
+                    cpsr.mode = oldmode;
+
+                    if(pc)
+                    {
+                        u32 data = rw(addr);
+                        r[15] = data & 0xfffffffe;
+                        cpsr.thumb = data & 1;
+                        if(s)
+                        {
+                            switch(cpsr.mode)
+                            {
+                                case arm_mode::fiq: cpsr = spsr_fiq; break;
+                                case arm_mode::irq: cpsr = spsr_irq; break;
+                                case arm_mode::supervisor: cpsr = spsr_svc; break;
+                                case arm_mode::abort: cpsr = spsr_abt; break;
+                                case arm_mode::undefined: cpsr = spsr_und; break;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    printf("STM\n");
+                    u16 reg_list = opcode & 0xffff;
+                    int rn = (opcode >> 16) & 0xf;
+                    int w = (opcode >> 21) & 1;
+                    int s = (opcode >> 22) & 1;
+                    int u = (opcode >> 23) & 1;
+                    int p = (opcode >> 24) & 1;
+
+                    u32 addr;
+                    if(u) addr = r[rn] + (p << 2);
+                    else
+                    {
+                        addr = r[rn] + ((!p) << 2);
+                        for(int i = 0; i < 16; i++)
+                        {
+                            if(reg_list & (1 << i)) addr -= 4;
+                        }
+                    }
+
+                    u32 count = 0;
+                    arm_mode oldmode = cpsr.mode;
+                    if(s) cpsr.mode = arm_mode::user;
+                    for(int i = 0; i < 16; i++)
+                    {
+                        if(reg_list & (1 << i))
+                        {
+                            ww(addr + count, r[i]);
+                            count += 4;
+                        }
+                    }
+
+                    cpsr.mode = oldmode;
+
+                    if(w)
+                    {
+                        if(u) r[rn] += count;
+                        else r[rn] -= count;
+                    }
+                }
                 break;
             }
             case 5:
