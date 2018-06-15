@@ -1,4 +1,7 @@
+#pragma once
+
 #include "common.h"
+#include "cp15.h"
 
 enum class arm_mode : u8
 {
@@ -43,17 +46,28 @@ struct arm_cpu
     u32 r13_irq, r14_irq;
     u32 r13_und, r14_und;
 
+    bool fiq, irq;
+
+    cp15_t cp15;
+
     void* device;
 
     std::function<u32(void*,u32)> rw_real;
     std::function<void(void*,u32,u32)> ww_real;
 
     void init();
+
+    void raise_fiq();
+    void lower_fiq();
+
+    void raise_irq();
+    void lower_irq();
+
     u32 rw(u32 addr);
     void ww(u32 addr, u32 data);
 
     u32 getloadstoreaddr(u32 opcode);
-    u32 get_shift_operand(u32 opcode);
+    u32 get_shift_operand(u32 opcode, bool s);
 
     void tick();
     void run(int insns);

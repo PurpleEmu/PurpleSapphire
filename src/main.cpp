@@ -24,8 +24,11 @@ int main(int ac, char** av)
     iphone2g dev;
     arm_cpu cpu;
 
-    dev.init();
     cpu.init();
+
+    dev.cpu = &cpu;
+
+    dev.init();
 
     cpu.device = &dev;
     
@@ -36,7 +39,7 @@ int main(int ac, char** av)
     fread(dev.bootrom, 1, 0x10000, fp);
     fclose(fp);
 
-    cpu.run(10);
+    cpu.run(300);
 
     return 0;
 }

@@ -1,9 +1,20 @@
+#pragma once
+
 #include "common.h"
+#include "arm.h"
+#include "clock.h"
+#include "vic.h"
 
 struct iphone2g
 {
     u8 bootrom[0x10000];
     u8 bootram[0x10000];
+
+    arm_cpu* cpu;
+
+    vic vics[2];
+    clock0_t clock0;
+    clock1_t clock1;
 
     void init();
 };
