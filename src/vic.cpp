@@ -114,7 +114,7 @@ void vic::mask_priority()
     if(stack_i >= 32)
     {
         printf("VIC has detected something seriously wrong\n");
-        return;
+        exit(EXIT_FAILURE); /* something has gone horribly wrong and to save the world we must kill this for the greater good */
     }
     stack_i++;
     if(current_intr == 32) priority = daisy_priority;
@@ -129,7 +129,7 @@ void vic::unmask_priority()
     if(stack_i < 1)
     {
         printf("VIC has detected something seriously wrong\n");
-        return;
+        exit(EXIT_FAILURE); /* see above */
     }
     stack_i--;
     priority = priority_stack[stack_i];
