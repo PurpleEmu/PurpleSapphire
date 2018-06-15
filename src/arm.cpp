@@ -15,26 +15,6 @@ void arm_cpu::init()
     cp15.init();
 }
 
-void arm_cpu::raise_fiq()
-{
-    fiq = true;
-}
-
-void arm_cpu::lower_fiq()
-{
-    fiq = false;
-}
-
-void arm_cpu::raise_irq()
-{
-    irq = true;
-}
-
-void arm_cpu::lower_irq()
-{
-    irq = false;
-}
-
 u32 arm_cpu::rw(u32 addr)
 {
     return rw_real(device, addr);
@@ -127,8 +107,8 @@ u32 arm_cpu::get_load_store_multi_addr(u32 opcode)
     }
 
     u32 addr;
-    if(u) addr = r[rn] + (p << 2);
-    else addr = r[rn] - count + ((!p) << 2);
+    if(u) addr = r[rn] + (p ? 4 : 0);
+    else addr = r[rn] - count + (p ? 0 : 4);
 
     if(w)
     {
@@ -146,9 +126,10 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
 
     if(i)
     {
-        int rotate = (shift_operand >> 8) << 1;
-        u32 operand = ((shift_operand & 0xff) << rotate) | ((shift_operand & 0xff) >> (32 - rotate));
-        if(s && (rotate > 0)) cpsr.carry = !(operand & 0x80000000);
+        int rotate = ((opcode >> 8) & 0xf) << 1;
+        u32 operand = shift_operand & 0xff;
+        if(rotate) operand = ((shift_operand & 0xff) >> rotate) | ((shift_operand & 0xff) << (32 - rotate));
+        else if(s && !rotate) cpsr.carry = operand & 0x80000000;
         return operand;
     }
     else
@@ -176,21 +157,21 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
             {
                 case 0:
                 operand = (shift < 32) ? (r[rm] << shift) : 0;
-                carry = !(r[rm] & (1 << (32 - shift)));
+                carry = (r[rm] & (1 << (32 - shift)));
                 break;
                 case 1:
                 operand = (shift < 32) ? (r[rm] >> shift) : 0;
-                carry = !(r[rm] & (1 << (shift - 1)));
+                carry = (r[rm] & (1 << (shift - 1)));
                 break;
                 case 2:
                 operand = r[rm] >> shift;
-                carry = !(r[rm] & (1 << (shift - 1)));
+                carry = (r[rm] & (1 << (shift - 1)));
                 break;
                 case 3:
                 if(reg) shift &= 0x1f;
                 operand = (r[rm] >> shift) | (r[rm] << (32 - shift));
-                if(shift > 0) carry = !(r[rm] & (1 << (shift - 1)));
-                else carry = !(r[rm] & 0x80000000);
+                if(shift > 0) carry = (r[rm] & (1 << (shift - 1)));
+                else carry = (r[rm] & 0x80000000);
                 break;
             }
         }
@@ -245,13 +226,15 @@ void arm_cpu::tick()
         irq = false;
     }
 
-    u32 opcode = rw(r[15]);
-    printf("Opcode: %08x\nPC:%08x\nLR:%08x\n", opcode, r[15], r[14]);
+    u32 opcode = 0;
     //for(int i = 0; i < 14; i++)
     //{
     //    printf("R%d: %08x\n", i, r[i]);
     //}
-
+    if(!cpsr.thumb)
+    {
+    opcode = rw(r[15]);
+    printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\n", opcode, r[15], r[14], r[13], r[0]);
     bool condition;
     switch(opcode >> 28)
     {
@@ -419,7 +402,13 @@ void arm_cpu::tick()
                                     case 1:
                                     {
                                         if((opcode >> 22) & 1) printf("CLZ\n");
-                                        else printf("BX\n");
+                                        else
+                                        {
+                                            printf("BX\n");
+                                            int rm = opcode & 0xf;
+                                            r[15] = r[rm] & 0xfffffffe;
+                                            cpsr.thumb = r[rm] & 1;
+                                        }
                                         break;
                                     }
                                     case 2: printf("BXJ\n"); break;
@@ -517,13 +506,13 @@ void arm_cpu::tick()
                                 int rn = (opcode >> 16) & 0xf;
                                 bool s = (opcode >> 20) & 1;
                                 u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
-                                u64 result64 = r[rn] - shift_operand;
+                                u64 result64 = (u64)r[rn] - shift_operand;
                                 u32 result = (u32)result64;
 
                                 if(s && (rd != 15))
                                 {
                                     cpsr.carry = result64 < 0x100000000ULL;
-                                    cpsr.overflow = !((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
+                                    cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
                                 }
@@ -550,13 +539,13 @@ void arm_cpu::tick()
                                 int rn = (opcode >> 16) & 0xf;
                                 bool s = (opcode >> 20) & 1;
                                 u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
-                                u64 result64 = shift_operand - r[rn];
+                                u64 result64 = (u64)shift_operand - r[rn];
                                 u32 result = (u32)result64;
 
                                 if(s && (rd != 15))
                                 {
                                     cpsr.carry = result64 < 0x100000000ULL;
-                                    cpsr.overflow = !((shift_operand ^ r[rn]) & (shift_operand ^ result) & 0x80000000);
+                                    cpsr.overflow = ((shift_operand ^ r[rn]) & (shift_operand ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
                                 }
@@ -583,13 +572,13 @@ void arm_cpu::tick()
                                 int rn = (opcode >> 16) & 0xf;
                                 bool s = (opcode >> 20) & 1;
                                 u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
-                                u64 result64 = r[rn] + shift_operand;
+                                u64 result64 = (u64)r[rn] + shift_operand;
                                 u32 result = (u32)result64;
 
                                 if(s && (rd != 15))
                                 {
                                     cpsr.carry = result64 > 0xffffffffULL;
-                                    cpsr.overflow = !(~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
+                                    cpsr.overflow = (~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
                                 }
@@ -618,13 +607,13 @@ void arm_cpu::tick()
                                 int rn = (opcode >> 16) & 0xf;
                                 bool s = (opcode >> 20) & 1;
                                 u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
-                                u64 result64 = r[rn] + shift_operand + cpsr.carry;
+                                u64 result64 = (u64)r[rn] + shift_operand + cpsr.carry;
                                 u32 result = (u32)result64;
 
                                 if(s && (rd != 15))
                                 {
                                     cpsr.carry = result64 > 0xffffffffULL;
-                                    cpsr.overflow = !(~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
+                                    cpsr.overflow = (~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
                                 }
@@ -651,13 +640,13 @@ void arm_cpu::tick()
                                 int rn = (opcode >> 16) & 0xf;
                                 bool s = (opcode >> 20) & 1;
                                 u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
-                                u64 result64 = r[rn] - shift_operand - ~cpsr.carry;
+                                u64 result64 = (u64)r[rn] - shift_operand - ~cpsr.carry;
                                 u32 result = (u32)result64;
 
                                 if(s && (rd != 15))
                                 {
                                     cpsr.carry = result64 < 0x100000000ULL;
-                                    cpsr.overflow = !((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
+                                    cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
                                 }
@@ -684,13 +673,13 @@ void arm_cpu::tick()
                                 int rn = (opcode >> 16) & 0xf;
                                 bool s = (opcode >> 20) & 1;
                                 u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
-                                u64 result64 = shift_operand - r[rn] - ~cpsr.carry;
+                                u64 result64 = (u64)shift_operand - r[rn] - ~cpsr.carry;
                                 u32 result = (u32)result64;
 
                                 if(s && (rd != 15))
                                 {
                                     cpsr.carry = result64 < 0x100000000ULL;
-                                    cpsr.overflow = !((shift_operand ^ r[rn]) & (shift_operand ^ result) & 0x80000000);
+                                    cpsr.overflow = ((shift_operand ^ r[rn]) & (shift_operand ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
                                 }
@@ -743,7 +732,7 @@ void arm_cpu::tick()
                                 u32 result = (u32)result64;
 
                                 cpsr.carry = result64 < 0x100000000ULL;
-                                cpsr.overflow = !((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
+                                cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                 cpsr.sign = result & 0x80000000;
                                 cpsr.zero = !result;
                                 break;
@@ -753,11 +742,11 @@ void arm_cpu::tick()
                                 printf("CMN\n");
                                 int rn = (opcode >> 16) & 0xf;
                                 u32 shift_operand = get_shift_operand(opcode, true);
-                                u64 result64 = r[rn] + shift_operand;
+                                u64 result64 = (u64)r[rn] + shift_operand;
                                 u32 result = (u32)result64;
 
                                 cpsr.carry = result64 > 0xffffffffULL;
-                                cpsr.overflow = !(~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
+                                cpsr.overflow = (~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                 cpsr.sign = result & 0x80000000;
                                 cpsr.zero = !result;
                                 break;
@@ -924,7 +913,7 @@ void arm_cpu::tick()
 
                             if(rd == 15)
                             {
-                                if(!(data & 1))
+                                if((data & 1))
                                 {
                                     cpsr.thumb = 1;
                                     r[15] = data & 0xfffffffe;
@@ -932,7 +921,7 @@ void arm_cpu::tick()
                                 else
                                 {
                                     cpsr.thumb = 0;
-                                    r[15] = (data - 8) & 0xfffffffc;
+                                    r[15] = (data - 4) & 0xfffffffc;
                                 }
                             }
                             else r[rd] = data;
@@ -1144,6 +1133,15 @@ void arm_cpu::tick()
     }
 
     r[15] += 4;
+    }
+    else
+    {
+        opcode = rw(r[15]);
+        if(r[15] & 2) opcode >>= 16;
+        else opcode &= 0xffff;
+        printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\n", opcode, r[15], r[14], r[13], r[0]);
+        r[15] += 2;
+    }
 }
 
 void arm_cpu::run(int insns)

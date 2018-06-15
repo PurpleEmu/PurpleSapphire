@@ -17,18 +17,20 @@ void vic::init()
 
     id[0] = 0x00041192;
     id[1] = 0xb105f00d;
+
+    daisy = nullptr;
 }
 
 void vic::raise(bool fiq)
 {
     if(fiq)
     {
-        cpu->raise_fiq();
+        cpu->fiq = true;
         if(daisy) daisy->raise(fiq);
     }
     else
     {
-        cpu->raise_irq();
+        cpu->irq = true;
         if(daisy)
         {
             daisy->daisy_vect_addr = address;
@@ -40,8 +42,8 @@ void vic::raise(bool fiq)
 
 void vic::lower(bool fiq)
 {
-    if(fiq) cpu->lower_fiq();
-    else cpu->lower_irq();
+    //if(fiq) cpu->lower_fiq();
+    //else cpu->lower_irq();
 
     if(daisy)
     {
@@ -50,7 +52,7 @@ void vic::lower(bool fiq)
             daisy_input = 0;
             daisy->update();
         }
-        else daisy->lower(fiq);
+        //else daisy->lower(fiq);
     }
 }
 
@@ -79,12 +81,12 @@ void vic::update()
     irq_status = (raw_intr | soft_int) & int_enable & ~int_select;
     fiq_status = (raw_intr | soft_int) & int_enable & int_select;
 
-    //if(fiq_status) raise(1);
-    //else lower(1);
+    if(fiq_status) raise(1);
+    else lower(1);
 
     if(irq_status || daisy_input)
     {
-        //current_highest_intr = priority_sorter();
+        current_highest_intr = priority_sorter();
         if(current_highest_intr < 32) address = vect_addr[current_highest_intr];
         else address = daisy_vect_addr;
 
@@ -147,7 +149,7 @@ u32 vic::irq_ack()
         daisy->unmask_priority();
     }
 
-    //update();
+    update();
     return res;
 }
 
@@ -161,7 +163,7 @@ void vic::irq_fin()
         daisy->unmask_priority();
     }
 
-    //update();
+    update();
 }
 
 u32 vic::rw(u32 addr)
@@ -195,12 +197,12 @@ void vic::ww(u32 addr, u32 data)
     if(addr >= 0x100 && addr < 0x180)
     {
         vect_addr[(addr & 0x7f) >> 2] = data;
-        //update();
+        update();
     }
     if(addr >= 0x200 && addr < 0x280)
     {
         vect_priority[(addr & 0x7f) >> 2] = data;
-        //update();
+        update();
     }
 
     switch(addr & 0xfff)
@@ -213,8 +215,8 @@ void vic::ww(u32 addr, u32 data)
         case 0x020: protection = data & 1; break;
         case 0x024: sw_priority_mask = data & 0xffff; break;
         case 0x028: daisy_priority = data & 0xf; break;
-        case 0xf00: irq_fin(); break; //TODO
+        case 0xf00: irq_fin(); break;
     }
 
-    //update();
+    update();
 }

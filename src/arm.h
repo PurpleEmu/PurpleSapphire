@@ -57,12 +57,6 @@ struct arm_cpu
 
     void init();
 
-    void raise_fiq();
-    void lower_fiq();
-
-    void raise_irq();
-    void lower_irq();
-
     u32 rw(u32 addr);
     void ww(u32 addr, u32 data);
 

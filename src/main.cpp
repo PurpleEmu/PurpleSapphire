@@ -39,7 +39,7 @@ int main(int ac, char** av)
     fread(dev.bootrom, 1, 0x10000, fp);
     fclose(fp);
 
-    cpu.run(300);
+    cpu.run(1000);
 
     return 0;
 }
