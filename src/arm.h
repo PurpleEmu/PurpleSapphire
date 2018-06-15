@@ -51,4 +51,10 @@ struct arm_cpu
     void init();
     u32 rw(u32 addr);
     void ww(u32 addr, u32 data);
+
+    u32 getloadstoreaddr(u32 opcode);
+    u32 get_shift_operand(u32 opcode);
+
+    void tick();
+    void run(int insns);
 };

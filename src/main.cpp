@@ -36,7 +36,7 @@ int main(int ac, char** av)
     fread(dev.bootrom, 1, 0x10000, fp);
     fclose(fp);
 
-    printf("Opcode: %08x\n", cpu.rw(0));
+    cpu.run(10);
 
     return 0;
 }
