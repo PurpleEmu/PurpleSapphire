@@ -6,6 +6,8 @@ compiler:
 os:
 - linux
 
+script: make -f Makefile.linux
+
 env:
   global:
    # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
@@ -23,5 +25,3 @@ addons:
     notification_email: alegend45@gmail.com
     build_command: "make -f Makefile.linux"
     branch_pattern: coverity_scan
-
-script: make -f Makefile.linux
