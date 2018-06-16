@@ -55,7 +55,7 @@ u32 arm_cpu::get_load_store_addr(u32 opcode)
             }
             case 3:
             {
-                if(!shift_imm) ((r[rm] >> 1) | cpsr.carry) ? 0x80000000 : 0;
+                if(!shift_imm) offset = ((r[rm] >> 1) | cpsr.carry) ? 0x80000000 : 0;
                 else offset = (r[rm] << shift_imm) | (r[rm] >> (32 - shift_imm));
                 break;
             }
