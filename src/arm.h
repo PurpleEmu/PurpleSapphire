@@ -31,7 +31,7 @@ struct arm_cpu
             u32 reserved1 : 7;
             u32 saturation : 1;
             u32 overflow : 1;
-            u32 carry : 1;
+            u64 carry : 1;
             u32 zero : 1;
             u32 sign : 1;
         };

@@ -12,6 +12,30 @@ void iphone2g::init()
 
     clock0.init();
     clock1.init();
+
+    wdt.dev = this;
+    wdt.init();
+}
+
+void iphone2g::tick()
+{
+    wdt.tick();
+}
+
+void iphone2g::interrupt(int num)
+{
+    num &= 0x3f;
+    printf("Interrupt %08x triggered!\n", num);
+    if(num >= 0x20)
+    {
+        vics[0].raw_intr |= 1 << num;
+        vics[0].update();
+    }
+    else
+    {
+        vics[1].raw_intr |= 1 << (num & 0x1f);
+        vics[1].update();
+    }
 }
 
 u32 iphone2g_rw(void* dev, u32 addr)
@@ -47,6 +71,11 @@ u32 iphone2g_rw(void* dev, u32 addr)
         printf("Clock1 read %08x\n", addr);
         return device->clock1.rw(addr & 0xfff);
     }
+    else if(addr >= 0x3e300000 && addr < 0x3e301000)
+    {
+        printf("WDT read %08x\n", addr);
+        return device->wdt.rw(addr & 0xfff);
+    }
     else printf("Unknown address %08x!\n", addr);
     return 0;
 }
@@ -79,6 +108,11 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
     else if(addr >= 0x3c500000 && addr < 0x3c501000)
     {
         printf("Clock1 write %08x data %08x\n", addr, data);
+        device->clock1.ww(addr & 0xfff, data);
+    }
+    else if(addr >= 0x3e300000 && addr < 0x3e301000)
+    {
+        printf("WDT write %08x data %08x\n", addr, data);
         device->clock1.ww(addr & 0xfff, data);
     }
     else printf("Unknown address %08x data %08x!\n", addr, data);

@@ -43,7 +43,11 @@ int main(int ac, char** av)
     }
     fclose(fp);
 
-    cpu.run(1000);
+    for(int i = 0; i < 8000; i++)
+    {
+        cpu.run(1);
+        dev.tick();
+    }
 
     return 0;
 }

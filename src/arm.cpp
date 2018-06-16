@@ -665,7 +665,7 @@ void arm_cpu::tick()
                                             int rm = opcode & 0xf;
                                             if(rm != 15) r[15] = (r[rm] & 0xfffffffe);
                                             cpsr.thumb = r[rm] & 1;
-                                            r[15] -= 4;
+                                            //r[15] -= 4;
                                         }
                                         break;
                                     }
@@ -1319,7 +1319,7 @@ void arm_cpu::tick()
                 if(addr & 0x800000) addr |= 0xff000000;
                 
                 if((opcode >> 24) & 1) r[14] = r[15];
-                r[15] += (addr << 2) + 4;
+                r[15] += (addr << 2);
                 break;
             }
             case 6: case 7:

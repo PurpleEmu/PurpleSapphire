@@ -4,6 +4,7 @@
 #include "arm.h"
 #include "clock.h"
 #include "vic.h"
+#include "wdt.h"
 
 struct iphone2g
 {
@@ -16,8 +17,13 @@ struct iphone2g
     vic vics[2];
     clock0_t clock0;
     clock1_t clock1;
+    wdt_t wdt;
 
     void init();
+
+    void tick();
+
+    void interrupt(int num);
 };
 
 u32 iphone2g_rw(void* dev, u32 addr);
