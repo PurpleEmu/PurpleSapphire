@@ -80,7 +80,7 @@ int vic::priority_sorter()
         prio_irq[i] = 33;
     }
     if(daisy_input) prio_irq[daisy_priority] = 32;
-    for(int i = 31; i >= 0; i--)
+    for(u32 i = 31; i >= 0; i--)
     {
         if(irq_status & (1 << i)) prio_irq[vect_priority[i]] = i;
     }
