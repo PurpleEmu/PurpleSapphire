@@ -13,7 +13,7 @@ void wdt_t::init()
 void wdt_t::tick()
 {
     iphone2g* device = (iphone2g*) dev;
-    /((ctrl & 0x100000) && ((ctrl & 0xff) != 0xa5))
+    if((ctrl & 0x100000) && ((ctrl & 0xff) != 0xa5))
     {
         cnt--;
     }

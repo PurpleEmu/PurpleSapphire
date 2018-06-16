@@ -20,7 +20,7 @@ int main(int ac, char** av)
     std::string device = av[1];
     device_type dev_type;
     if(device == "iphone2g") dev_type = device_type::iphone2g;
-    else if(device == "iphone3gs") dev_type = device::iphone3gs;
+    else if(device == "iphone3gs") dev_type = device_type::iphone3gs;
     else return 2;
 
     if(dev_type == device_type::iphone2g)

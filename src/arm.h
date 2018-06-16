@@ -17,7 +17,7 @@ enum class arm_mode : u8
 enum class arm_type
 {
     arm11, cortex_a8
-}
+};
 
 struct arm_cpu
 {
