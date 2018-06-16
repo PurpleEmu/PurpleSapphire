@@ -48,8 +48,8 @@ u32 iphone2g_rw(void* dev, u32 addr)
     }
     if(addr >= 0x22000000 && addr < 0x22040000)
     {
-        return device->ram[(addr+0) & 0x3ffff] | (device->ram[(addr+1) & 0x3ffff] << 8)
-        | (device->ram[(addr+2) & 0x3ffff] << 16) | (device->ram[(addr+3) & 0x3ffff] << 24);
+        return device->amc0[(addr+0) & 0x3ffff] | (device->amc0[(addr+1) & 0x3ffff] << 8)
+        | (device->amc0[(addr+2) & 0x3ffff] << 16) | (device->amc0[(addr+3) & 0x3ffff] << 24);
     }
     else if(addr >= 0x38100000 && addr < 0x38101000)
     {
@@ -85,10 +85,10 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
     iphone2g* device = (iphone2g*) dev;
     if(addr >= 0x22000000 && addr < 0x22040000)
     {
-        device->ram[(addr+0) & 0x3ffff] = (data >> 0) & 0xff;
-        device->ram[(addr+1) & 0x3ffff] = (data >> 8) & 0xff;
-        device->ram[(addr+2) & 0x3ffff] = (data >> 16) & 0xff;
-        device->ram[(addr+3) & 0x3ffff] = (data >> 24) & 0xff;
+        device->amc0[(addr+0) & 0x3ffff] = (data >> 0) & 0xff;
+        device->amc0[(addr+1) & 0x3ffff] = (data >> 8) & 0xff;
+        device->amc0[(addr+2) & 0x3ffff] = (data >> 16) & 0xff;
+        device->amc0[(addr+3) & 0x3ffff] = (data >> 24) & 0xff;
     }
     else if(addr >= 0x38100000 && addr < 0x38101000)
     {

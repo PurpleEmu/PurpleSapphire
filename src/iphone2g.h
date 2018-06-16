@@ -9,8 +9,7 @@
 struct iphone2g
 {
     u8 bootrom[0x10000];
-    u8 bootram[0x10000];
-    u8 ram[0x40000];
+    u8 amc0[0x40000];
 
     arm_cpu* cpu;
 
