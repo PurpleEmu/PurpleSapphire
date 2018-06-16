@@ -127,7 +127,7 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
     if(i)
     {
         int rotate = ((opcode >> 8) & 0xf) << 1;
-        u32 operand = shift_operand & 0xff;
+        u32 operand = 0;
         if(rotate) operand = ((shift_operand & 0xff) >> rotate) | ((shift_operand & 0xff) << (32 - rotate));
         else if(s && rotate) cpsr.carry = operand & 0x80000000;
         return operand;

@@ -82,7 +82,7 @@ int vic::priority_sorter()
     if(daisy_input) prio_irq[daisy_priority] = 32;
     for(int i = 31; i >= 0; i--)
     {
-        if(irq_status & (1 << i)) prio_irq[vect_priority[(u32)i]] = (u32)i;
+        if(irq_status & (1UL << i)) prio_irq[vect_priority[(u32)i]] = (u32)i;
     }
     for(int i = 0; i < 16; i++)
     {
