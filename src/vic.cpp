@@ -9,6 +9,7 @@ void vic::init()
     }
     irq_status = 0;
     fiq_status = 0;
+    raw_intr = 0;
     int_select = 0;
     int_enable = 0;
     soft_int = 0;

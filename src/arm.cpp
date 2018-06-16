@@ -409,9 +409,8 @@ void arm_cpu::tick()
                                             printf("BX\n");
                                             int rm = opcode & 0xf;
                                             if(rm != 15) r[15] = (r[rm] & 0xfffffffe);
-                                            else r[15] += 4;
                                             cpsr.thumb = r[rm] & 1;
-                                            r[15] += 4;
+                                            r[15] -= 4;
                                         }
                                         break;
                                     }

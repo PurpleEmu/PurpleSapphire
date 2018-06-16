@@ -34,6 +34,8 @@ struct cp15_t
         u32 whole;
     } control;
 
+    u32 peripheral_port_remap;
+
     void init();
     u32 read(int opcode1, int opcode2, int crn, int crm);
     void write(int opcode1, int opcode2, int crn, int crm, u32 data);
