@@ -97,8 +97,8 @@ int vic::priority_sorter()
 
 void vic::update()
 {
-    irq_status = (raw_intr | soft_int)/* & int_enable*/ & ~int_select;
-    fiq_status = (raw_intr | soft_int)/* & int_enable*/ & int_select;
+    irq_status = (raw_intr | soft_int) & int_enable & ~int_select;
+    fiq_status = (raw_intr | soft_int) & int_enable & int_select;
 
     if(fiq_status) raise(1);
     else lower(1);

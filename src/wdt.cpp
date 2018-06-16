@@ -13,18 +13,18 @@ void wdt_t::init()
 void wdt_t::tick()
 {
     iphone2g* device = (iphone2g*) dev;
-    //if((ctrl & 0x100000) && ((ctrl & 0xff) != 0xa5))
-    //{
+    /((ctrl & 0x100000) && ((ctrl & 0xff) != 0xa5))
+    {
         cnt--;
-    //}
-    //if(ctrl & 0x8000)
-    //{
+    }
+    if(ctrl & 0x8000)
+    {
         if(cnt == 0)
         {
             cnt = cnt_period;
             device->interrupt(0x33);
         }
-    //}
+    }
 }
 
 u32 wdt_t::rw(u32 addr)
