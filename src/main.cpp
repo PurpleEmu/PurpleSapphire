@@ -36,6 +36,11 @@ int main(int ac, char** av)
     cpu.ww_real = iphone2g_ww;
 
     FILE* fp = fopen("roms/iphone1-bootrom.bin","rb");
+    if(!fp)
+    {
+        printf("unable to read 'roms/iphone1-bootrom.bin'!\nAre you sure the file exists?\n");
+        return -1;
+    }
     if(fread(dev.bootrom, 1, 0x10000, fp) != 0x10000)
     {
         fclose(fp);
