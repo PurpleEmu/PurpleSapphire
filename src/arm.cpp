@@ -266,13 +266,157 @@ void arm_cpu::tick()
             {
                 if(((opcode >> 4) & 1) && ((opcode >> 7) & 1) && !((opcode >> 25) & 1))
                 {
-                    if(!((opcode >> 5) & 3) || ((opcode >> 24) & 1))
+                    if(((opcode >> 5) & 3) || ((opcode >> 24) & 1))
                     {
                         printf("Unknown load and store extension!\n");
                     }
                     else
                     {
-                        printf("Unknown multiply!\n");
+                        switch((opcode >> 21) & 7)
+                        {
+                            case 0:
+                            {
+                                printf("MUL\n");
+                                int rm = opcode & 0xf;
+                                int rs = (opcode >> 8) & 0xf;
+                                int rd = (opcode >> 16) & 0xf;
+                                bool s = (opcode >> 20) & 1;
+
+                                r[rd] = r[rm] * r[rs];
+                                if(s)
+                                {
+                                    if(!r[rd]) cpsr.zero = true;
+                                    else cpsr.zero = false;
+                                    if(r[rd] & 0x80000000) cpsr.sign = true;
+                                    else cpsr.sign = false;
+                                }
+                                break;
+                            }
+                            case 1:
+                            {
+                                printf("MLA\n");
+                                int rm = opcode & 0xf;
+                                int rs = (opcode >> 8) & 0xf;
+                                int rn = (opcode >> 12) & 0xf;
+                                int rd = (opcode >> 16) & 0xf;
+                                bool s = (opcode >> 20) & 1;
+
+                                r[rd] = (r[rm] * r[rs]) + r[rn];
+                                if(s)
+                                {
+                                    if(!r[rd]) cpsr.zero = true;
+                                    else cpsr.zero = false;
+                                    if(r[rd] & 0x80000000) cpsr.sign = true;
+                                    else cpsr.sign = false;
+                                }
+                                break;
+                            }
+                            case 2:
+                            {
+                                printf("UMAAL\n");
+                                int rm = opcode & 0xf;
+                                int rs = (opcode >> 8) & 0xf;
+                                int rdlo = (opcode >> 12) & 0xf;
+                                int rdhi = (opcode >> 16) & 0xf;
+
+                                u64 result = (u64)r[rm] * r[rs];
+                                result += r[rdlo] + r[rdhi];
+                                r[rdlo] = (u32)result;
+                                r[rdhi] = result >> 32;
+                                break;
+                            }
+                            case 4:
+                            {
+                                printf("UMULL\n");
+                                int rm = opcode & 0xf;
+                                int rs = (opcode >> 8) & 0xf;
+                                int rdlo = (opcode >> 12) & 0xf;
+                                int rdhi = (opcode >> 16) & 0xf;
+                                bool s = (opcode >> 20) & 1;
+
+                                u64 result = (u64)r[rm] * r[rs];
+                                r[rdlo] = (u32)result;
+                                r[rdhi] = result >> 32;
+
+                                if(s)
+                                {
+                                    if(!result) cpsr.zero = true;
+                                    else cpsr.zero = false;
+                                    if(r[rdhi] & 0x80000000) cpsr.sign = true;
+                                    else cpsr.sign = false;
+                                }
+                                break;
+                            }
+                            case 5:
+                            {
+                                printf("UMLAL\n");
+                                int rm = opcode & 0xf;
+                                int rs = (opcode >> 8) & 0xf;
+                                int rdlo = (opcode >> 12) & 0xf;
+                                int rdhi = (opcode >> 16) & 0xf;
+                                bool s = (opcode >> 20) & 1;
+
+                                u64 result = (u64)r[rm] * r[rs];
+                                result += r[rdlo] | ((u64)r[rdhi] << 32);
+                                r[rdlo] = (u32)result;
+                                r[rdhi] = result >> 32;
+
+                                if(s)
+                                {
+                                    if(!result) cpsr.zero = true;
+                                    else cpsr.zero = false;
+                                    if(r[rdhi] & 0x80000000) cpsr.sign = true;
+                                    else cpsr.sign = false;
+                                }
+                                break;
+                            }
+                            case 6:
+                            {
+                                printf("SMULL\n");
+                                int rm = opcode & 0xf;
+                                int rs = (opcode >> 8) & 0xf;
+                                int rdlo = (opcode >> 12) & 0xf;
+                                int rdhi = (opcode >> 16) & 0xf;
+                                bool s = (opcode >> 20) & 1;
+
+                                s64 result = (s64)r[rm] * (s32)r[rs];
+                                result += (s64)(r[rdlo] | ((u64)r[rdhi] << 32));
+                                r[rdlo] = (u32)result;
+                                r[rdhi] = result >> 32;
+
+                                if(s)
+                                {
+                                    if(!result) cpsr.zero = true;
+                                    else cpsr.zero = false;
+                                    if(r[rdhi] & 0x80000000) cpsr.sign = true;
+                                    else cpsr.sign = false;
+                                }
+                                break;
+                            }
+                            case 7:
+                            {
+                                printf("SMLAL\n");
+                                int rm = opcode & 0xf;
+                                int rs = (opcode >> 8) & 0xf;
+                                int rdlo = (opcode >> 12) & 0xf;
+                                int rdhi = (opcode >> 16) & 0xf;
+                                bool s = (opcode >> 20) & 1;
+
+                                u64 result = (u64)r[rm] * r[rs];
+                                result += r[rdlo] | ((u64)r[rdhi] << 32);
+                                r[rdlo] = (u32)result;
+                                r[rdhi] = result >> 32;
+
+                                if(s)
+                                {
+                                    if(!result) cpsr.zero = true;
+                                    else cpsr.zero = false;
+                                    if(r[rdhi] & 0x80000000) cpsr.sign = true;
+                                    else cpsr.sign = false;
+                                }
+                                break;
+                            }
+                        }
                     }
                 }
                 else
@@ -414,8 +558,26 @@ void arm_cpu::tick()
                                         }
                                         break;
                                     }
-                                    case 2: printf("BXJ\n"); break;
-                                    case 3: printf("BLX_2\n"); break;
+                                    case 2:
+                                    {
+                                        printf("BXJ\n");
+                                        int rm = opcode & 0xf;
+                                        if(rm != 15) r[15] = (r[rm] & 0xfffffffe);
+                                        cpsr.thumb = r[rm] & 1;
+                                        r[15] -= 4;
+                                        break;
+                                    }
+                                    case 3:
+                                    {
+                                        printf("BLX_2\n");
+                                        int rm = opcode & 0xf;
+
+                                        r[14] = r[15] - 4;
+                                        r[15] = r[rm] & 0xfffffffe;
+                                        if(r[rm] & 1) cpsr.thumb = true;
+                                        else cpsr.thumb = false;
+                                        break;
+                                    }
                                     case 5:
                                     {
                                         switch((opcode >> 21) & 3)
@@ -1125,7 +1287,14 @@ void arm_cpu::tick()
             }
             case 2:
             {
-                if((opcode >> 25) & 1) printf("BLX\n");
+                if((opcode >> 25) & 1)
+                {
+                    printf("BLX\n");
+                    u32 offset = (opcode & 0xffffff);
+                    if(opcode & 0x800000) offset |= 0xff000000;
+                    int h = (opcode >> 24) & 1;
+                    r[15] += (offset << 2) + (h << 1);
+                }
                 else
                 {
                     if((opcode >> 22) & 1) printf("SRS\n");
@@ -1159,6 +1328,215 @@ void arm_cpu::tick()
         else opcode &= 0xffff;
         printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\n", opcode, r[15], r[14], r[13], r[0]);
         r[15] += 2;
+
+        switch((opcode >> 13) & 7)
+        {
+            case 0:
+            {
+                switch((opcode >> 11) & 3)
+                {
+                    case 0: printf("Thumb LSL\n"); break;
+                    case 1: printf("Thumb LSR\n"); break;
+                    case 2: printf("Thumb ASR\n"); break;
+                    case 3:
+                    {
+                        if((opcode >> 9) & 1)
+                        {
+                            if((opcode >> 10) & 1) printf("Thumb SUB\n");
+                            else printf("Thumb SUB_3\n");
+                        }
+                        else
+                        {
+                            if((opcode >> 10) & 1) printf("Thumb ADD\n");
+                            else printf("Thumb ADD_3\n");
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
+            case 1:
+            {
+                switch((opcode >> 11) & 3)
+                {
+                    case 0: printf("Thumb MOV\n"); break;
+                    case 1: printf("Thumb CMP\n"); break;
+                    case 2: printf("Thumb ADD_2\n"); break;
+                    case 3: printf("Thumb SUB_2\n"); break;
+                }
+                break;
+            }
+            case 2:
+            {
+                if((opcode >> 12) & 1)
+                {
+                    switch((opcode >> 9) & 7)
+                    {
+                        case 0: printf("Thumb STR_2\n"); break;
+                        case 1: printf("Thumb STRH_2\n"); break;
+                        case 2: printf("Thumb STRB_2\n"); break;
+                        case 3: printf("Thumb LDRSB\n"); break;
+                        case 4: printf("Thumb LDR_2\n"); break;
+                        case 5: printf("Thumb LDRH_2\n"); break;
+                        case 6: printf("Thumb LDRB_2\n"); break;
+                        case 7: printf("Thumb LDRSH\n"); break;
+                    }
+                }
+                else
+                {
+                    if((opcode >> 11) & 1) printf("Thumb LDR_3\n");
+                    else
+                    {
+                        if((opcode >> 10) & 1)
+                        {
+                            switch((opcode >> 8) & 3)
+                            {
+                                case 0: printf("Thumb ADD_4\n"); break;
+                                case 1: printf("Thumb CMP_3\n"); break;
+                                case 2: printf("Thumb CPY\n"); break;
+                                case 3:
+                                {
+                                    if((opcode >> 7) & 1) printf("Thumb BLX_2\n");
+                                    else printf("Thumb BX\n");
+                                    break;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            switch((opcode >> 6) & 0xf)
+                            {
+                                case 0x0: printf("Thumb AND\n"); break;
+                                case 0x1: printf("Thumb EOR\n"); break;
+                                case 0x2: printf("Thumb LSL_2\n"); break;
+                                case 0x3: printf("Thumb LSR_2\n"); break;
+                                case 0x4: printf("Thumb ASR_2\n"); break;
+                                case 0x5: printf("Thumb ADC\n"); break;
+                                case 0x6: printf("Thumb SBC\n"); break;
+                                case 0x7: printf("Thumb ROR\n"); break;
+                                case 0x8: printf("Thumb TST\n"); break;
+                                case 0x9: printf("Thumb NEG\n"); break;
+                                case 0xa: printf("Thumb CMP_2\n"); break;
+                                case 0xb: printf("Thumb CMN\n"); break;
+                                case 0xc: printf("Thumb ORR\n"); break;
+                                case 0xd: printf("Thumb MUL\n"); break;
+                                case 0xe: printf("Thumb BIC\n"); break;
+                                case 0xf: printf("Thumb MVN\n"); break;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+            case 3:
+            {
+                if((opcode >> 11) & 1)
+                {
+                    if((opcode >> 12) & 1) printf("Thumb LDRB\n");
+                    else printf("Thumb LDR\n");
+                }
+                else
+                {
+                    if((opcode >> 12) & 1) printf("Thumb STRB\n");
+                    else printf("Thumb STR\n");
+                }
+                break;
+            }
+            case 4:
+            {
+                if((opcode >> 12) & 1)
+                {
+                    if((opcode >> 11) & 1) printf("Thumb LDR_4\n");
+                    else printf("Thumb STR_3\n");
+                }
+                else
+                {
+                    if((opcode >> 11) & 1) printf("Thumb LDRH\n");
+                    else printf("Thumb STRH\n");
+                }
+                break;
+            }
+            case 5:
+            {
+                if((opcode >> 12) & 1)
+                {
+                    switch((opcode >> 9) & 3)
+                    {
+                        case 0:
+                        {
+                            if((opcode >> 7) & 1) printf("Thumb SUB_4\n");
+                            else printf("Thumb ADD_7\n");
+                            break;
+                        }
+                        case 1:
+                        {
+                            if((opcode >> 11) & 1)
+                            {
+                                switch((opcode >> 6) & 3)
+                                {
+                                    case 0: printf("Thumb REV\n"); break;
+                                    case 1: printf("Thumb REV16\n"); break;
+                                    case 3: printf("Thumb REVSH\n"); break;
+                                }
+                            }
+                            else
+                            {
+                                switch((opcode >> 6) & 3)
+                                {
+                                    case 0: printf("Thumb SXTH\n"); break;
+                                    case 1: printf("Thumb SXTB\n"); break;
+                                    case 2: printf("Thumb UXTH\n"); break;
+                                    case 3: printf("Thumb UXTB\n"); break;
+                                }
+                            }
+                            break;
+                        }
+                        case 2:
+                        {
+                            if((opcode >> 11) & 1) printf("Thumb POP\n");
+                            else printf("Thumb PUSH\n");
+                            break;
+                        }
+                        case 3:
+                        {
+                            if((opcode >> 11) & 1) printf("Thumb BKPT\n");
+                            else
+                            {
+                                if((opcode >> 5) & 1) printf("Thumb CPS\n");
+                                else printf("Thumb SETEND\n");
+                            }
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    if((opcode >> 11) & 1) printf("Thumb ADD_6\n");
+                    else printf("Thumb ADD_5\n");
+                }
+                break;
+            }
+            case 6:
+            {
+                if((opcode >> 12) & 1)
+                {
+                    if(((opcode >> 8) & 0xf) == 0xf) printf("Thumb SWI\n");
+                    else printf("Thumb B\n");
+                }
+                else
+                {
+                    if((opcode >> 11) & 1) printf("Thumb LDMIA\n");
+                    else printf("Thumb STMIA\n");
+                }
+                break;
+            }
+            case 7:
+            {
+                if(!((opcode >> 11) & 3)) printf("Thumb B_2\n");
+                else printf("Thumb BLX\n");
+                break;
+            }
+        }
     }
 }
 
