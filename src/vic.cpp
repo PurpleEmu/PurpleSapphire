@@ -146,7 +146,7 @@ u32 vic::irq_ack()
     mask_priority();
     if(is_daisy)
     {
-        daisy->unmask_priority();
+        daisy->mask_priority();
     }
 
     update();

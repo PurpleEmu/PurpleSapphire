@@ -234,7 +234,7 @@ void arm_cpu::tick()
     if(!cpsr.thumb)
     {
     opcode = rw(r[15]);
-    printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\n", opcode, r[15], r[14], r[13], r[0]);
+    printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nc flag: %d, z flag: %d\n", opcode, r[15], r[14], r[13], r[0], cpsr.carry, cpsr.zero);
     bool condition;
     switch(opcode >> 28)
     {
@@ -246,11 +246,11 @@ void arm_cpu::tick()
         case 0x5: condition = !cpsr.sign; break;
         case 0x6: condition = cpsr.overflow; break;
         case 0x7: condition = !cpsr.overflow; break;
-        case 0x8: condition = cpsr.carry && cpsr.zero; break;
-        case 0x9: condition = cpsr.carry || cpsr.zero; break;
+        case 0x8: condition = cpsr.carry && !cpsr.zero; break;
+        case 0x9: condition = !cpsr.carry || cpsr.zero; break;
         case 0xa: condition = cpsr.sign == cpsr.overflow; break;
         case 0xb: condition = cpsr.sign != cpsr.overflow; break;
-        case 0xc: condition = cpsr.zero && (cpsr.sign == cpsr.overflow); break;
+        case 0xc: condition = !cpsr.zero && (cpsr.sign == cpsr.overflow); break;
         case 0xd: condition = cpsr.zero || (cpsr.sign != cpsr.overflow); break;
         case 0xe: condition = true; break;
         case 0xf: condition = false; break;
@@ -406,7 +406,7 @@ void arm_cpu::tick()
                                         {
                                             printf("BX\n");
                                             int rm = opcode & 0xf;
-                                            r[15] = r[rm] & 0xfffffffe;
+                                            r[15] = (r[rm] & 0xfffffffe) + 8;
                                             cpsr.thumb = r[rm] & 1;
                                         }
                                         break;
@@ -511,7 +511,7 @@ void arm_cpu::tick()
 
                                 if(s && (rd != 15))
                                 {
-                                    cpsr.carry = result64 < 0x100000000ULL;
+                                    cpsr.carry = r[rn] < shift_operand;
                                     cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
@@ -544,7 +544,7 @@ void arm_cpu::tick()
 
                                 if(s && (rd != 15))
                                 {
-                                    cpsr.carry = result64 < 0x100000000ULL;
+                                    cpsr.carry = (s64)result64 < 0x100000000;
                                     cpsr.overflow = ((shift_operand ^ r[rn]) & (shift_operand ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
@@ -577,7 +577,7 @@ void arm_cpu::tick()
 
                                 if(s && (rd != 15))
                                 {
-                                    cpsr.carry = result64 > 0xffffffffULL;
+                                    cpsr.carry = result64 & 0x100000000ULL;
                                     cpsr.overflow = (~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
@@ -612,7 +612,7 @@ void arm_cpu::tick()
 
                                 if(s && (rd != 15))
                                 {
-                                    cpsr.carry = result64 > 0xffffffffULL;
+                                    cpsr.carry = result64 & 0x100000000ULL;
                                     cpsr.overflow = (~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
@@ -645,7 +645,7 @@ void arm_cpu::tick()
 
                                 if(s && (rd != 15))
                                 {
-                                    cpsr.carry = result64 < 0x100000000ULL;
+                                    cpsr.carry = (s64)result64 < 0x100000000;
                                     cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
@@ -678,7 +678,7 @@ void arm_cpu::tick()
 
                                 if(s && (rd != 15))
                                 {
-                                    cpsr.carry = result64 < 0x100000000ULL;
+                                    cpsr.carry = (s64)result64 < 0x100000000;
                                     cpsr.overflow = ((shift_operand ^ r[rn]) & (shift_operand ^ result) & 0x80000000);
                                     cpsr.sign = result & 0x80000000;
                                     cpsr.zero = !result;
@@ -728,10 +728,10 @@ void arm_cpu::tick()
                                 printf("CMP\n");
                                 int rn = (opcode >> 16) & 0xf;
                                 u32 shift_operand = get_shift_operand(opcode, true);
-                                u64 result64 = r[rn] - shift_operand;
+                                u64 result64 = (u64)r[rn] - shift_operand;
                                 u32 result = (u32)result64;
 
-                                cpsr.carry = result64 < 0x100000000ULL;
+                                cpsr.carry = (s64)result64 < 0x100000000;
                                 cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                 cpsr.sign = result & 0x80000000;
                                 cpsr.zero = !result;
@@ -745,7 +745,7 @@ void arm_cpu::tick()
                                 u64 result64 = (u64)r[rn] + shift_operand;
                                 u32 result = (u32)result64;
 
-                                cpsr.carry = result64 > 0xffffffffULL;
+                                cpsr.carry = result64 & 0x100000000ULL;
                                 cpsr.overflow = (~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                 cpsr.sign = result & 0x80000000;
                                 cpsr.zero = !result;
@@ -899,7 +899,16 @@ void arm_cpu::tick()
                 {
                     if((opcode >> 20) & 1)
                     {
-                        if((opcode >> 22) & 1) printf("LDRB\n");
+                        if((opcode >> 22) & 1)
+                        {
+                            printf("LDRB\n");
+                            int rd = (opcode >> 12) & 0xf;
+                            u32 addr = get_load_store_addr(opcode);
+                            u32 data = rw(addr);
+                            data >>= ((addr & 3) << 3);
+                            data &= 0xff;
+                            r[rd] = data;
+                        }
                         else
                         {
                             printf("LDR\n");
@@ -929,7 +938,16 @@ void arm_cpu::tick()
                     }
                     else
                     {
-                        if((opcode >> 22) & 1) printf("STRB\n");
+                        if((opcode >> 22) & 1)
+                        {
+                            printf("STRB\n");
+                            int rd = (opcode >> 12) & 0xf;
+                            u32 addr = get_load_store_addr(opcode);
+                            u32 data = rw(addr);
+                            data &= ~(0xff << ((addr & 3) << 3));
+                            data |= (r[rd] & 0xff) << ((addr & 3) << 3);
+                            ww(addr, data);
+                        }
                         else
                         {
                             printf("STR\n");
@@ -1034,7 +1052,7 @@ void arm_cpu::tick()
                 u32 addr = opcode & 0xffffff;
                 if(addr & 0x800000) addr |= 0xff000000;
                 
-                if((opcode >> 24) & 1) r[14] = r[15] + 4;
+                if((opcode >> 24) & 1) r[14] = r[15];
                 r[15] += (addr << 2) + 4;
                 break;
             }
