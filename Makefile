@@ -1,6 +1,6 @@
 CXX=g++
 CFLAGS=-std=c++14 -g
-LIBS=-lmingw32 -mwindows
+LIBS=
 VPATH=src
 OBJ = arm.o clock.o cp15.o iphone2g.o main.o vic.o
 
