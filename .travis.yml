@@ -6,7 +6,7 @@ compiler:
 os:
 - linux
 
-script: make -f Makefile.linux
+script: make
 
 env:
   global:

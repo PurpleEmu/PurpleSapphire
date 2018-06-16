@@ -14,6 +14,11 @@ enum class arm_mode : u8
     system = 0x1f
 };
 
+enum class arm_type
+{
+    arm11, cortex_a8
+}
+
 struct arm_cpu
 {
     union
@@ -47,6 +52,8 @@ struct arm_cpu
     u32 r13_und, r14_und;
 
     bool fiq, irq, fiq_enable, irq_enable;
+
+    arm_type type;
 
     cp15_t cp15;
 

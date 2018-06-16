@@ -21,6 +21,8 @@ src/cp15.cpp
 src/cp15.h
 src/iphone2g.cpp
 src/iphone2g.h
+src/iphone3gs.cpp
+src/iphone3gs.h
 src/main.cpp
 src/vic.cpp
 src/vic.h
