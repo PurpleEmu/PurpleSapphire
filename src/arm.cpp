@@ -266,7 +266,7 @@ void arm_cpu::tick()
             {
                 if(((opcode >> 4) & 1) && ((opcode >> 7) & 1) && !((opcode >> 25) & 1))
                 {
-                    if((!(opcode >> 5) & 3) || ((opcode >> 24) & 1))
+                    if(!((opcode >> 5) & 3) || ((opcode >> 24) & 1))
                     {
                         printf("Unknown load and store extension!\n");
                     }
