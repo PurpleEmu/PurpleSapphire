@@ -3,12 +3,12 @@
 void iphone2g::init()
 {
     //TODO
+    vics[0].init();
+    vics[1].init();
+
     vics[0].daisy = &vics[1];
     vics[0].cpu = cpu;
     vics[1].cpu = cpu;
-
-    vics[0].init();
-    vics[1].init();
 
     clock0.init();
     clock1.init();
