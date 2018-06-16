@@ -126,77 +126,181 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
 
     if(i)
     {
-        int rotate = ((opcode >> 8) & 0xf) << 1;
-        u32 operand = 0;
-        if(rotate) operand = ((shift_operand & 0xff) >> rotate) | ((shift_operand & 0xff) << (32 - rotate));
-        else if(s && rotate) cpsr.carry = operand & 0x80000000;
+        //Immediate
+        u8 imm = shift_operand & 0xff;
+        u8 rotate_imm = ((shift_operand >> 8) & 0xf) << 1;
+        u32 operand = (imm >> rotate_imm) | (imm << (32 - rotate_imm));
+        if(rotate_imm != 0) cpsr.carry = (operand >> 31) & 1;
+        return operand;
+    }
+    else if(!((shift_operand >> 4) & 0xff))
+    {
+        //Register
+        int rm = shift_operand & 0xf;
+        u32 operand = r[rm];
         return operand;
     }
     else
     {
-        u32 operand = 0;
-        bool carry = false;
-        int rm = shift_operand & 0xf;
-        int shift_op = (opcode >> 5) & 3;
-        u32 shift;
-        bool reg = (opcode >> 4) & 1;
-        if(reg)
+        switch((shift_operand >> 4) & 7)
         {
-            int rs = (shift_operand >> 8) & 0xf;
-            shift = r[rs] & 0xff;
-        }
-        else
-        {
-            shift = (shift_operand >> 7) & 0x1f;
-            if(!shift && ((shift_op == 1) || (shift_op == 2))) shift = 32;
-        }
-
-        if(shift > 0 && shift <= 32)
-        {
-            switch(shift_op)
+            case 0:
             {
-                case 0:
-                operand = (shift < 32) ? (r[rm] << shift) : 0;
-                carry = (r[rm] & (1 << (32 - shift)));
-                break;
-                case 1:
-                operand = (shift < 32) ? (r[rm] >> shift) : 0;
-                carry = (r[rm] & (1 << (shift - 1)));
-                break;
-                case 2:
-                operand = r[rm] >> shift;
-                carry = (r[rm] & (1 << (shift - 1)));
-                break;
-                case 3:
-                if(reg) shift &= 0x1f;
-                operand = (r[rm] >> shift) | (r[rm] << (32 - shift));
-                if(shift > 0) carry = (r[rm] & (1 << (shift - 1)));
-                else carry = (r[rm] & 0x80000000);
-                break;
-            }
-        }
-        else
-        {
-            if(!shift)
-            {
-                operand = r[rm];
-                carry = cpsr.carry;
-
-                if(!reg && (shift_op == 3))
+                //LSLImm
+                int shift_imm = (shift_operand >> 7) & 0x1f;
+                int rm = shift_operand & 0xf;
+                u32 operand;
+                if(shift_imm == 0) operand = r[rm];
+                else
                 {
-                    operand = (operand >> 1) | (cpsr.carry ? 0x80000000 : 0);
-                    carry = !(r[rm] & 1);
+                    operand = r[rm] << shift_imm;
+                    cpsr.carry = r[rm] & (1 << (32 - shift_imm));
                 }
+                return operand;
             }
-            else if(shift_op > 1)
+            case 1:
             {
-                carry = !(r[rm] & 0x80000000);
-                operand = carry ? 0xffffffff : 0;
+                //LSLReg
+                int rm = shift_operand & 0xf;
+                int rs = (shift_operand >> 8) & 0xf;
+                u32 operand = 0;
+                if((r[rs] & 0xff) == 0) operand = r[rm];
+                else if((r[rs] & 0xff) < 32)
+                {
+                    operand = r[rm] << (r[rs] & 0xff);
+                    cpsr.carry = r[rm] & (1 << (32 - (r[rs] & 0xff)));
+                }
+                else if((r[rs] & 0xff) == 32)
+                {
+                    operand = 0;
+                    cpsr.carry = r[rm] & 1;
+                }
+                else
+                {
+                    operand = 0;
+                    cpsr.carry = false;
+                }
+                return operand;
+            }
+            case 2:
+            {
+                //LSRImm
+                int shift_imm = (shift_operand >> 7) & 0x1f;
+                int rm = shift_operand & 0xf;
+                u32 operand;
+                if(shift_imm == 0)
+                {
+                    operand = 0;
+                    cpsr.carry = ((r[rm] >> 31) & 1);
+                }
+                else
+                {
+                    operand = r[rm] >> shift_imm;
+                    cpsr.carry = r[rm] & (1 << (shift_imm - 1));
+                }
+                return operand;
+            }
+            case 3:
+            {
+                //LSRReg
+                int rm = shift_operand & 0xf;
+                int rs = (shift_operand >> 8) & 0xf;
+                u32 operand = 0;
+                if((r[rs] & 0xff) == 0) operand = r[rm];
+                else if((r[rs] & 0xff) < 32)
+                {
+                    operand = r[rm] >> (r[rs] & 0xff);
+                    cpsr.carry = r[rm] & (1 << ((r[rs] & 0xff) - 1));
+                }
+                else if((r[rs] & 0xff) == 32)
+                {
+                    operand = 0;
+                    cpsr.carry = (r[rm] >> 31) & 1;
+                }
+                else
+                {
+                    operand = 0;
+                    cpsr.carry = false;
+                }
+                return operand;
+            }
+            case 4:
+            {
+                //ASRImm
+                int shift_imm = (shift_operand >> 7) & 0x1f;
+                int rm = shift_operand & 0xf;
+                u32 operand;
+                if(shift_imm == 0)
+                {
+                    if(((r[rm] >> 31) & 1) == 0) operand = 0;
+                    else operand = 0xffffffff;
+                    cpsr.carry = ((r[rm] >> 31) & 1);
+                }
+                else
+                {
+                    operand = (s32)r[rm] >> shift_imm;
+                    cpsr.carry = r[rm] & (1 << (shift_imm - 1));
+                }
+                return operand;
+            }
+            case 5:
+            {
+                //ASRReg
+                int rm = shift_operand & 0xf;
+                int rs = (shift_operand >> 8) & 0xf;
+                u32 operand = 0;
+                if((r[rs] & 0xff) == 0) operand = r[rm];
+                else if((r[rs] & 0xff) < 32)
+                {
+                    operand = (s32)r[rm] >> (r[rs] & 0xff);
+                    cpsr.carry = r[rm] & (1 << ((r[rs] & 0xff) - 1));
+                }
+                else
+                {
+                    if(((r[rm] >> 31) & 1) == 0) operand = 0;
+                    else operand = 0xffffffff;
+                    cpsr.carry = (r[rm] >> 31) & 1;
+                }
+                return operand;
+            }
+            case 6:
+            {
+                //RORImm
+                int shift_imm = (shift_operand >> 7) & 0x1f;
+                int rm = shift_operand & 0xf;
+                u32 operand;
+                if(shift_imm == 0)
+                {
+                    operand = (cpsr.carry << 31) | (r[rm] >> 1);
+                    cpsr.carry = r[rm] & 1;
+                }
+                else
+                {
+                    operand = (r[rm] >> shift_imm) | (r[rm] << (32 - shift_imm));
+                    cpsr.carry = r[rm] & (1 << (shift_imm - 1));
+                }
+                return operand;
+            }
+            case 7:
+            {
+                //RORReg
+                int rm = shift_operand & 0xf;
+                int rs = (shift_operand >> 8) & 0xf;
+                u32 operand = 0;
+                if((r[rs] & 0xff) == 0) operand = r[rm];
+                else if((r[rs] & 0x1f) == 0)
+                {
+                    operand = r[rm];
+                    cpsr.carry = (r[rm] >> 31) & 1;
+                }
+                else
+                {
+                    operand = (r[rm] >> (r[rs] & 0x1f)) | (r[rm] << (32 - (r[rs] & 0x1f)));
+                    cpsr.carry = r[rm] & (1 << ((r[rs] & 0x1f) - 1));
+                }
+                return operand;
             }
         }
-
-        if(s) cpsr.carry = carry;
-        return operand;
     }
 }
 
@@ -237,7 +341,7 @@ void arm_cpu::tick()
     {
     opcode = rw(r[15]);
     printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\n", opcode, r[15], r[14], r[13], r[0]);
-    bool condition;
+    bool condition = false;
     switch(opcode >> 28)
     {
         case 0x0: condition = cpsr.zero; break;
@@ -615,7 +719,7 @@ void arm_cpu::tick()
                                         if(!r[rd]) cpsr.zero = true;
                                         else cpsr.zero = false;
                                         if(r[rd] & 0x80000000) cpsr.sign = true;
-                                        else cpsr.sign = true;
+                                        else cpsr.sign = false;
                                     }
                                     else
                                     {
@@ -648,7 +752,7 @@ void arm_cpu::tick()
                                         if(!r[rd]) cpsr.zero = true;
                                         else cpsr.zero = false;
                                         if(r[rd] & 0x80000000) cpsr.sign = true;
-                                        else cpsr.sign = true;
+                                        else cpsr.sign = false;
                                     }
                                     else
                                     {
@@ -932,7 +1036,7 @@ void arm_cpu::tick()
                                         if(!r[rd]) cpsr.zero = true;
                                         else cpsr.zero = false;
                                         if(r[rd] & 0x80000000) cpsr.sign = true;
-                                        else cpsr.sign = true;
+                                        else cpsr.sign = false;
                                     }
                                     else
                                     {
@@ -964,7 +1068,7 @@ void arm_cpu::tick()
                                         if(!r[rd]) cpsr.zero = true;
                                         else cpsr.zero = false;
                                         if(r[rd] & 0x80000000) cpsr.sign = true;
-                                        else cpsr.sign = true;
+                                        else cpsr.sign = false;
                                     }
                                     else
                                     {
@@ -997,7 +1101,7 @@ void arm_cpu::tick()
                                         if(!r[rd]) cpsr.zero = true;
                                         else cpsr.zero = false;
                                         if(r[rd] & 0x80000000) cpsr.sign = true;
-                                        else cpsr.sign = true;
+                                        else cpsr.sign = false;
                                     }
                                     else
                                     {
@@ -1029,7 +1133,7 @@ void arm_cpu::tick()
                                         if(!r[rd]) cpsr.zero = true;
                                         else cpsr.zero = false;
                                         if(r[rd] & 0x80000000) cpsr.sign = true;
-                                        else cpsr.sign = true;
+                                        else cpsr.sign = false;
                                     }
                                     else
                                     {
@@ -1078,7 +1182,7 @@ void arm_cpu::tick()
                             u32 data = rw(addr & 0xfffffffc);
                             if(!cp15.control.unaligned_access_enable)
                             {
-                                data = (data >> ((addr & 3) << 3)) | (data >> (32 - ((addr & 3) << 3)));
+                                data = (data >> ((addr & 3) << 3)) | (data >> (24 - ((addr & 3) << 3)));
                             }
 
                             if(rd == 15)

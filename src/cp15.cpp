@@ -29,6 +29,7 @@ u32 cp15_t::read(int opcode1, int opcode2, int crn, int crm)
                                 case 0x2: return 0x00020002;
                                 case 0x3: return 0x00000800;
                             }
+                            break;
                         }
                         case 0x1:
                         {
@@ -43,6 +44,7 @@ u32 cp15_t::read(int opcode1, int opcode2, int crn, int crm)
                                 case 0x6: return 0x01222100;
                                 case 0x7: return 0x00000000;
                             }
+                            break;
                         }
                     }
                     break;
