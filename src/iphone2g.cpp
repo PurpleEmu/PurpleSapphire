@@ -48,10 +48,11 @@ u32 iphone2g_rw(void* dev, u32 addr)
     }
     else if(addr >= 0x22000000 && addr < 0x22040000)
     {
+        printf("AMC0 read %08x\n", addr);
         return device->amc0[(addr+0) & 0x3ffff] | (device->amc0[(addr+1) & 0x3ffff] << 8)
         | (device->amc0[(addr+2) & 0x3ffff] << 16) | (device->amc0[(addr+3) & 0x3ffff] << 24);
     }
-    else if(addr >= 0x22000000 && addr < 0x22100000)
+    else if(addr >= 0x24000000 && addr < 0x24100000)
     {
         return device->nor[(addr+0) & 0x1fffff] | (device->nor[(addr+1) & 0x1fffff] << 8)
         | (device->nor[(addr+2) & 0x1fffff] << 16) | (device->nor[(addr+3) & 0x1fffff] << 24);
@@ -90,6 +91,7 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
     iphone2g* device = (iphone2g*) dev;
     if(addr >= 0x22000000 && addr < 0x22040000)
     {
+        printf("AMC0 write %08x data %08x\n", addr, data);
         device->amc0[(addr+0) & 0x3ffff] = (data >> 0) & 0xff;
         device->amc0[(addr+1) & 0x3ffff] = (data >> 8) & 0xff;
         device->amc0[(addr+2) & 0x3ffff] = (data >> 16) & 0xff;

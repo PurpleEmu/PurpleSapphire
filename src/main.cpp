@@ -9,9 +9,9 @@ enum class device_type
 
 int main(int ac, char** av)
 {   
-    if(ac < 3)
+    if(ac < 4)
     {
-        printf("usage: %s [device] <path_to_bootrom>\n", av[0]);
+        printf("usage: %s [device] <path_to_bootrom> <path_to_nor>\n", av[0]);
         printf("device can be \"iphone2g\". No other devices are supported at this time.\n");
         return 1;
     }
@@ -42,6 +42,19 @@ int main(int ac, char** av)
         return 3;
     }
     if(fread(dev.bootrom, 1, 0x10000, fp) != 0x10000)
+    {
+        fclose(fp);
+        return 4;
+    }
+    fclose(fp);
+
+    fp = fopen(av[3],"rb");
+    if(!fp)
+    {
+        printf("unable to open %s, are you sure it exists?\n", av[2]);
+        return 3;
+    }
+    if(fread(dev.nor, 1, 0x100000, fp) != 0x100000)
     {
         fclose(fp);
         return 4;
