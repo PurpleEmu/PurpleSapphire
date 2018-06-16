@@ -26,7 +26,7 @@ void iphone2g::interrupt(int num)
 {
     num &= 0x3f;
     printf("Interrupt %08x triggered!\n", num);
-    if(num >= 0x20)
+    if(num < 0x20)
     {
         vics[0].raw_intr |= 1 << num;
         vics[0].update();
@@ -102,7 +102,7 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
     }
     else if(addr >= 0x38e01000 && addr < 0x38e02000)
     {
-        printf("Vic1 write %08x data %08x %x\n", addr, data, (u32*)&device->vics[1]);
+        printf("Vic1 write %08x data %08x\n", addr, data);
         device->vics[1].ww(addr & 0xfff, data);
     }
     else if(addr >= 0x3c500000 && addr < 0x3c501000)
