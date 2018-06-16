@@ -129,7 +129,7 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
         int rotate = ((opcode >> 8) & 0xf) << 1;
         u32 operand = shift_operand & 0xff;
         if(rotate) operand = ((shift_operand & 0xff) >> rotate) | ((shift_operand & 0xff) << (32 - rotate));
-        else if(s && !rotate) cpsr.carry = operand & 0x80000000;
+        else if(s && rotate) cpsr.carry = operand & 0x80000000;
         return operand;
     }
     else
@@ -707,7 +707,6 @@ void arm_cpu::tick()
                                 printf("TST\n");
                                 int rn = (opcode >> 16) & 0xf;
                                 u32 shift_operand = get_shift_operand(opcode, true);
-                                
                                 u32 result = r[rn] & shift_operand;
 
                                 cpsr.sign = result & 0x80000000;
@@ -814,7 +813,6 @@ void arm_cpu::tick()
                                             case arm_mode::supervisor: cpsr = spsr_svc; break;
                                             case arm_mode::abort: cpsr = spsr_abt; break;
                                             case arm_mode::undefined: cpsr = spsr_und; break;
-
                                         }
                                     }
                                 }
@@ -848,7 +846,6 @@ void arm_cpu::tick()
                                             case arm_mode::supervisor: cpsr = spsr_svc; break;
                                             case arm_mode::abort: cpsr = spsr_abt; break;
                                             case arm_mode::undefined: cpsr = spsr_und; break;
-
                                         }
                                     }
                                 }
@@ -881,7 +878,6 @@ void arm_cpu::tick()
                                             case arm_mode::supervisor: cpsr = spsr_svc; break;
                                             case arm_mode::abort: cpsr = spsr_abt; break;
                                             case arm_mode::undefined: cpsr = spsr_und; break;
-
                                         }
                                     }
                                 }
