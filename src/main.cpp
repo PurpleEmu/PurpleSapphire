@@ -36,10 +36,14 @@ int main(int ac, char** av)
     cpu.ww_real = iphone2g_ww;
 
     FILE* fp = fopen("roms/iphone1-bootrom.bin","rb");
+    if(!fp)
+    {
+        return 3;
+    }
     if(fread(dev.bootrom, 1, 0x10000, fp) != 0x10000)
     {
         fclose(fp);
-        return 3;
+        return 4;
     }
     fclose(fp);
 

@@ -102,7 +102,7 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
     }
     else if(addr >= 0x38e01000 && addr < 0x38e02000)
     {
-        printf("Vic1 write %08x data %08x\n", addr, data);
+        printf("Vic1 write %08x data %08x %x\n", addr, data, (u32*)&device->vics[1]);
         device->vics[1].ww(addr & 0xfff, data);
     }
     else if(addr >= 0x3c500000 && addr < 0x3c501000)
