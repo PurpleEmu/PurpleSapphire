@@ -1396,8 +1396,23 @@ void arm_cpu::tick()
                                 case 2: printf("Thumb CPY\n"); break;
                                 case 3:
                                 {
-                                    if((opcode >> 7) & 1) printf("Thumb BLX_2\n");
-                                    else printf("Thumb BX\n");
+                                    if((opcode >> 7) & 1)
+                                    {
+                                        printf("Thumb BLX_2\n");
+                                        int rm = (opcode >> 3) & 7;
+
+                                        r[14] = (r[15] - 2) | 1;
+                                        r[15] = r[rm] & 0xfffffffe;
+                                        cpsr.thumb = r[rm] & 1;
+                                    }
+                                    else
+                                    {
+                                        printf("Thumb BX\n");
+                                        int rm = (opcode >> 3) & 0xf;
+
+                                        r[15] = r[rm] & 0xfffffffe;
+                                        cpsr.thumb = r[rm] & 1;
+                                    }
                                     break;
                                 }
                             }
@@ -1521,7 +1536,33 @@ void arm_cpu::tick()
                 if((opcode >> 12) & 1)
                 {
                     if(((opcode >> 8) & 0xf) == 0xf) printf("Thumb SWI\n");
-                    else printf("Thumb B\n");
+                    else
+                    {
+                        printf("Thumb B\n");
+                        s8 imm = opcode & 0xff;
+                        int cond = (opcode >> 8) & 0xf;
+                        bool cond_met;
+                        switch(cond)
+                        {
+                            case 0x0: cond_met = cpsr.zero; break;
+                            case 0x1: cond_met = !cpsr.zero; break;
+                            case 0x2: cond_met = cpsr.carry; break;
+                            case 0x3: cond_met = !cpsr.carry; break;
+                            case 0x4: cond_met = cpsr.sign; break;
+                            case 0x5: cond_met = !cpsr.sign; break;
+                            case 0x6: cond_met = cpsr.overflow; break;
+                            case 0x7: cond_met = !cpsr.overflow; break;
+                            case 0x8: cond_met = cpsr.carry && !cpsr.zero; break;
+                            case 0x9: cond_met = !cpsr.carry || cpsr.zero; break;
+                            case 0xa: cond_met = cpsr.sign == cpsr.overflow; break;
+                            case 0xb: cond_met = cpsr.sign != cpsr.overflow; break;
+                            case 0xc: cond_met = !cpsr.zero && (cpsr.sign == cpsr.overflow); break;
+                            case 0xd: cond_met = cpsr.zero || (cpsr.sign != cpsr.overflow); break;
+                            case 0xe: cond_met = true; break;
+                            case 0xf: cond_met = false; break;
+                        }
+                        if(cond_met) r[15] = (u32)(r[15] + ((s16)imm << 1));
+                    }
                 }
                 else
                 {
@@ -1532,8 +1573,41 @@ void arm_cpu::tick()
             }
             case 7:
             {
-                if(!((opcode >> 11) & 3)) printf("Thumb B_2\n");
-                else printf("Thumb BLX\n");
+                if(!((opcode >> 11) & 3))
+                {
+                    printf("Thumb B_2\n");
+                    s32 imm = (opcode & 0x7ff) << 1;
+                    if(imm & 0x800) imm |= 0xfffff000;
+
+                    r[15] = (u32)(r[15] + imm);
+                }
+                else
+                {
+                    printf("Thumb BLX\n");
+                    u32 imm = opcode & 0x7ff;
+                    u32 h = (opcode >> 11) & 3;
+
+                    if(h)
+                    {
+                        if(h != 2)
+                        {
+                            u32 lr = (r[15] - 2) | 1;
+                            r[15] = r[14] + (imm << 1);
+                            r[14] = lr;
+
+                            if(h == 1)
+                            {
+                                r[15] &= 0xfffffffc;
+                                cpsr.thumb = false;
+                            }
+                        }
+                        else
+                        {
+                            if(imm & 0x400) imm |= 0xfffff800;
+                            r[14] = (u32)(r[15] + (imm << 12));
+                        }
+                    } 
+                }
                 break;
             }
         }
