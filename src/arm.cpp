@@ -56,7 +56,7 @@ u32 arm_cpu::get_load_store_addr(u32 opcode)
             }
             case 3:
             {
-                if(shift_imm == 0) offset = (cpsr.carry << 31) | (r[rm] >> 1);
+                if(shift_imm == 0) offset = ((u32)cpsr.carry << 31) | (r[rm] >> 1);
                 else offset = (r[rm] >> shift_imm) | (r[rm] << (32 - shift_imm));
                 break;
             }
@@ -272,7 +272,7 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
                 u32 operand;
                 if(shift_imm == 0)
                 {
-                    operand = (cpsr.carry << 31) | (r[rm] >> 1);
+                    operand = ((u32)cpsr.carry << 31) | (r[rm] >> 1);
                     cpsr.carry = r[rm] & 1;
                 }
                 else
