@@ -33,30 +33,29 @@ u32 arm_cpu::get_load_store_addr(u32 opcode)
     bool p = (opcode >> 24) & 1;
     bool i = (opcode >> 25) & 1;
 
-    u32 offset;
-
-    arm_mode oldmode = cpsr.mode;
+    arm_mode old_mode = cpsr.mode;
     if(!p && w) cpsr.mode = arm_mode::user;
+    u32 offset = 0;
     if(i)
     {
         int rm = opcode & 0xf;
-        int shift_mode = (opcode >> 5) & 3;
+        int shift_op = (opcode >> 5) & 3;
         int shift_imm = (opcode >> 7) & 0x1f;
 
-        switch(shift_mode)
+        switch(shift_op)
         {
             case 0: offset = r[rm] << shift_imm; break;
-            case 1: offset = (!shift_imm) ? r[rm] >> shift_imm : 0; break;
+            case 1: offset = (shift_imm != 0) ? r[rm] >> shift_imm : 0; break;
             case 2:
             {
-                if(!shift_imm) offset = (!(r[rm] & 0x80000000)) ? 0xffffffff : 0;
+                if(shift_imm == 0) offset = (r[rm] >> 31) ? 0xffffffff : 0;
                 else offset = r[rm] >> shift_imm;
                 break;
             }
             case 3:
             {
-                if(!shift_imm) offset = ((r[rm] >> 1) | cpsr.carry) ? 0x80000000 : 0;
-                else offset = (r[rm] << shift_imm) | (r[rm] >> (32 - shift_imm));
+                if(shift_imm == 0) offset = (cpsr.carry << 31) | (r[rm] >> 1);
+                else offset = (r[rm] >> shift_imm) | (r[rm] << (32 - shift_imm));
                 break;
             }
         }
@@ -71,24 +70,24 @@ u32 arm_cpu::get_load_store_addr(u32 opcode)
         {
             if(u) r[rn] += offset;
             else r[rn] -= offset;
-            addr = r[rn];
+
+            addr = (rn == 15) ? (r[rn] + 8) : r[rn];
         }
-        else addr = u ? (r[rn] + offset) : (r[rn] - offset);
+        else if(rn != 15) addr = u ? (r[rn] + offset) : (r[rn] - offset);
+        else addr = u ? (r[rn] + offset + 8) : (r[rn] - offset + 8);
     }
     else
     {
         if(!w)
         {
-            addr = r[rn];
+            addr = (rn == 15) ? (r[rn] + 8) : r[rn];
 
             if(u) r[rn] += offset;
             else r[rn] -= offset;
         }
     }
 
-    if(rn == 15) addr += 8;
-
-    cpsr.mode = oldmode;
+    cpsr.mode = old_mode;
     return addr;
 }
 
@@ -1180,25 +1179,18 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             u32 addr = get_load_store_addr(opcode);
                             u32 data = rw(addr & 0xfffffffc);
-                            if(!cp15.control.unaligned_access_enable)
+                            if(!cp15.control.unaligned_access_enable && ((addr & 3) != 0))
                             {
-                                data = (data >> ((addr & 3) << 3)) | (data >> (24 - ((addr & 3) << 3)));
+                                data = (data >> ((addr & 3) << 3)) | (data >> (32 - ((addr & 3) << 3)));
                             }
+
+                            r[rd] = data;
 
                             if(rd == 15)
                             {
-                                if((data & 1))
-                                {
-                                    cpsr.thumb = 1;
-                                    r[15] = data & 0xfffffffe;
-                                }
-                                else
-                                {
-                                    cpsr.thumb = 0;
-                                    r[15] = (data - 4) & 0xfffffffc;
-                                }
+                                cpsr.thumb = data & 1;
+                                r[15] &= 0xfffffffe;
                             }
-                            else r[rd] = data;
                         }
                     }
                     else
