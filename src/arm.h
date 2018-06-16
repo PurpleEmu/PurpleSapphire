@@ -46,7 +46,7 @@ struct arm_cpu
     u32 r13_irq, r14_irq;
     u32 r13_und, r14_und;
 
-    bool fiq, irq;
+    bool fiq, irq, fiq_enable, irq_enable;
 
     cp15_t cp15;
 

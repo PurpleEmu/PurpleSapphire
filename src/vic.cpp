@@ -7,6 +7,11 @@ void vic::init()
         vect_priority[i] = 0xf;
         vect_addr[i] = 0;
     }
+    for(int i = 0; i < 17; i++)
+    {
+        priority_stack[i] = 0x10;
+        irq_stack[i] = 33;
+    }
     irq_status = 0;
     fiq_status = 0;
     raw_intr = 0;
@@ -19,8 +24,7 @@ void vic::init()
     current_intr = 33;
     current_highest_intr = 33;
     stack_i = 0;
-    priority_stack[0] = 0x10;
-    irq_stack[0] = 33;
+    
     priority = 0x10;
     address = 0;
 
@@ -57,8 +61,8 @@ void vic::raise(bool fiq)
 
 void vic::lower(bool fiq)
 {
-    //if(fiq) cpu->lower_fiq();
-    //else cpu->lower_irq();
+    if(fiq) cpu->fiq = false;
+    else cpu->irq = false;
 
     if(daisy)
     {
@@ -67,7 +71,7 @@ void vic::lower(bool fiq)
             daisy_input = 0;
             daisy->update();
         }
-        //else daisy->lower(fiq);
+        else daisy->lower(fiq);
     }
 }
 
@@ -128,7 +132,7 @@ void vic::update()
 
 void vic::mask_priority()
 {
-    if(stack_i >= 32)
+    if(stack_i >= 16)
     {
         printf("VIC has detected something seriously wrong\n");
         exit(EXIT_FAILURE); /* something has gone horribly wrong and to save the world we must kill this for the greater good */
@@ -196,6 +200,7 @@ u32 vic::rw(u32 addr)
         case 0x008: return raw_intr;
         case 0x00c: return int_select;
         case 0x010: return int_enable;
+        case 0x014: return int_enable;
         case 0x018: return soft_int;
         case 0x020: return protection;
         case 0x024: return sw_priority_mask;

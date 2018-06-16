@@ -9,8 +9,10 @@ void arm_cpu::init()
 
     cpsr.whole = 0x400001d3;
 
-    fiq = 0;
-    irq = 0;
+    fiq = false;
+    irq = false;
+    fiq_enable = true;
+    irq_enable = true;
 
     cp15.init();
 }
@@ -314,21 +316,27 @@ enum class arm_cond : u8
 void arm_cpu::tick()
 {
     //TODO
-    if(fiq)
+    if(fiq && fiq_enable)
     {
         r14_fiq = r[14];
         r[14] = r[15] + 4;
         r[15] = 0x1c;
-        fiq = false;
+        fiq_enable = false;
         printf("ARM11 got FIQ!\n");
     }
-    else if(irq)
+    else if(irq && irq_enable && !fiq)
     {
         r14_irq = r[14];
         r[14] = r[15] + 4;
         r[15] = 0x18;
-        irq = false;
+        irq_enable = false;
         printf("ARM11 got IRQ!\n");
+    }
+
+    if(!fiq && !irq)
+    {
+        fiq_enable = true;
+        irq_enable = true;
     }
 
     u32 opcode = 0;
