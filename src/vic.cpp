@@ -5,7 +5,14 @@ void vic::init()
     for(int i = 0; i < 32; i++)
     {
         vect_priority[i] = 0xf;
+        vect_addr[i] = 0;
     }
+    irq_status = 0;
+    fiq_status = 0;
+    int_select = 0;
+    int_enable = 0;
+    soft_int = 0;
+    protection = 0;
     sw_priority_mask = 0xffff;
     daisy_priority = 0xf;
     current_intr = 33;
@@ -14,9 +21,16 @@ void vic::init()
     priority_stack[0] = 0x10;
     irq_stack[0] = 33;
     priority = 0x10;
+    address = 0;
 
-    id[0] = 0x00041192;
-    id[1] = 0xb105f00d;
+    id[0] = 0x92;
+    id[1] = 0x11;
+    id[2] = 0x04;
+    id[3] = 0x00;
+    id[4] = 0x0d;
+    id[5] = 0xf0;
+    id[6] = 0x05;
+    id[7] = 0xb1;
 
     daisy = nullptr;
 }
@@ -170,7 +184,7 @@ u32 vic::rw(u32 addr)
 {
     if(addr & 3) return 0;
 
-    if(addr >= 0xfe0 && addr < 0x1000) return id[(addr - 0xfe0) >> 2];
+    if(addr >= 0xfe0 && addr < 0x1000) return id[(addr & 0x1c) >> 2];
     if(addr >= 0x100 && addr < 0x180) return vect_addr[(addr & 0x7f) >> 2];
     if(addr >= 0x200 && addr < 0x280) return vect_priority[(addr & 0x7f) >> 2];
 

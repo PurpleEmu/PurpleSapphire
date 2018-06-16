@@ -217,6 +217,7 @@ void arm_cpu::tick()
         r[14] = r[15] + 4;
         r[15] = 0x1c;
         fiq = false;
+        printf("ARM11 got FIQ!\n");
     }
     else if(irq)
     {
@@ -224,6 +225,7 @@ void arm_cpu::tick()
         r[14] = r[15] + 4;
         r[15] = 0x18;
         irq = false;
+        printf("ARM11 got IRQ!\n");
     }
 
     u32 opcode = 0;
@@ -234,7 +236,7 @@ void arm_cpu::tick()
     if(!cpsr.thumb)
     {
     opcode = rw(r[15]);
-    printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nc flag: %d, z flag: %d\n", opcode, r[15], r[14], r[13], r[0], cpsr.carry, cpsr.zero);
+    printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\n", opcode, r[15], r[14], r[13], r[0]);
     bool condition;
     switch(opcode >> 28)
     {
@@ -406,8 +408,10 @@ void arm_cpu::tick()
                                         {
                                             printf("BX\n");
                                             int rm = opcode & 0xf;
-                                            r[15] = (r[rm] & 0xfffffffe) + 8;
+                                            if(rm != 15) r[15] = (r[rm] & 0xfffffffe);
+                                            else r[15] += 4;
                                             cpsr.thumb = r[rm] & 1;
+                                            r[15] += 4;
                                         }
                                         break;
                                     }
@@ -1048,7 +1052,8 @@ void arm_cpu::tick()
             }
             case 5:
             {
-                printf("B\n");
+                if((opcode >> 24) & 1) printf("BL\n");
+                else printf("B\n");
                 u32 addr = opcode & 0xffffff;
                 if(addr & 0x800000) addr |= 0xff000000;
                 

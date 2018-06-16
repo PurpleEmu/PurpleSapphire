@@ -33,7 +33,7 @@ struct vic
 
     vic* daisy;
 
-    u32 id[2];
+    u32 id[8];
 
     void init();
 

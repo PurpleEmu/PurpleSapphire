@@ -52,6 +52,9 @@ struct arm_cpu
 
     void* device;
 
+    u32 next_opcode;
+    u32 opcode;
+
     std::function<u32(void*,u32)> rw_real;
     std::function<void(void*,u32,u32)> ww_real;
 
