@@ -46,10 +46,15 @@ u32 iphone2g_rw(void* dev, u32 addr)
         return device->bootrom[(addr+0) & 0xffff] | (device->bootrom[(addr+1) & 0xffff] << 8)
         | (device->bootrom[(addr+2) & 0xffff] << 16) | (device->bootrom[(addr+3) & 0xffff] << 24);
     }
-    if(addr >= 0x22000000 && addr < 0x22040000)
+    else if(addr >= 0x22000000 && addr < 0x22040000)
     {
         return device->amc0[(addr+0) & 0x3ffff] | (device->amc0[(addr+1) & 0x3ffff] << 8)
         | (device->amc0[(addr+2) & 0x3ffff] << 16) | (device->amc0[(addr+3) & 0x3ffff] << 24);
+    }
+    else if(addr >= 0x22000000 && addr < 0x22100000)
+    {
+        return device->nor[(addr+0) & 0x1fffff] | (device->nor[(addr+1) & 0x1fffff] << 8)
+        | (device->nor[(addr+2) & 0x1fffff] << 16) | (device->nor[(addr+3) & 0x1fffff] << 24);
     }
     else if(addr >= 0x38100000 && addr < 0x38101000)
     {
