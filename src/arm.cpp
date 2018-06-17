@@ -613,7 +613,7 @@ void arm_cpu::tick()
     if(!cpsr.thumb)
     {
         opcode = rw(r[15]);
-        printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR9:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[9], r[12], cpsr.whole);
+        printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
         bool condition = false;
         switch(opcode >> 28)
         {
@@ -1212,10 +1212,9 @@ void arm_cpu::tick()
                                     printf("BLX_2\n");
                                     int rm = opcode & 0xf;
 
-                                    r[14] = r[15] - 4;
+                                    r[14] = (r[15] + 2) | 1;
                                     r[15] = r[rm] & 0xfffffffe;
-                                    if(r[rm] & 1) cpsr.thumb = true;
-                                    else cpsr.thumb = false;
+                                    cpsr.thumb = r[rm] & 1;
                                     break;
                                 }
                                 case 5:
@@ -2065,7 +2064,111 @@ void arm_cpu::tick()
             case 0:
             {
                 if((opcode >> 16) & 1) printf("SETEND\n");
-                else printf("CPS\n");
+                else
+                {
+                    printf("CPS\n");
+                    int imod = (opcode >> 18) & 3;
+                    int mmod = (opcode >> 17) & 1;
+                    int mode = opcode & 0x1f;
+                    int a = (opcode >> 8) & 1;
+                    int i = (opcode >> 7) & 1;
+                    int f = (opcode >> 6) & 1;
+
+                    if(imod & 2)
+                    {
+                        if(a) cpsr.abort_disable = imod & 1;
+                        if(i) cpsr.irq_disable = imod & 1;
+                        if(f) cpsr.fiq_disable = imod & 1;
+                    }
+                    else if(mmod)
+                    {
+                        arm_mode old_mode = cpsr.mode;
+
+                        cpsr.mode = (arm_mode)mode;
+
+                        u32 saved_reg[15];
+
+                        switch(old_mode)
+                        {
+                        case mode_user:
+                        case mode_system:
+                        {
+                            for(int i = 0; i < 15; i++)
+                            {
+                                saved_reg[i] = r[i];
+                            }
+                            break;
+                        }
+                        case mode_fiq:
+                        {
+                            for(int i = 8; i < 15; i++)
+                            {
+                                saved_reg[i] = r[i];
+                            }
+                            break;
+                        }
+                        case mode_irq:
+                        case mode_supervisor:
+                        case mode_abort:
+                        case mode_undefined:
+                        {
+                            for(int i = 13; i < 15; i++)
+                            {
+                                saved_reg[i] = r[i];
+                            }
+                            break;
+                        }
+                        }
+
+                        switch(cpsr.mode)
+                        {
+                        case mode_user:
+                        case mode_system:
+                        {
+                            for(int i = 0; i < 15; i++)
+                            {
+                                r[i] = saved_reg[i];
+                            }
+                            break;
+                        }
+                        case mode_fiq:
+                        {
+                            r8_fiq = saved_reg[8];
+                            r9_fiq = saved_reg[9];
+                            r10_fiq = saved_reg[10];
+                            r11_fiq = saved_reg[11];
+                            r12_fiq = saved_reg[12];
+                            r13_fiq = saved_reg[13];
+                            r14_fiq = saved_reg[14];
+                            break;
+                        }
+                        case mode_irq:
+                        {
+                            r13_irq = saved_reg[13];
+                            r14_irq = saved_reg[14];
+                            break;
+                        }
+                        case mode_supervisor:
+                        {
+                            r13_svc = saved_reg[13];
+                            r14_svc = saved_reg[14];
+                            break;
+                        }
+                        case mode_abort:
+                        {
+                            r13_abt = saved_reg[13];
+                            r14_abt = saved_reg[14];
+                            break;
+                        }
+                        case mode_undefined:
+                        {
+                            r13_und = saved_reg[13];
+                            r14_und = saved_reg[14];
+                            break;
+                        }
+                        }
+                    }
+                }
                 break;
             }
             case 1:
@@ -2111,11 +2214,10 @@ void arm_cpu::tick()
     }
     else
     {
-        opcode = rw(r[15]);
+        opcode = rw(r[15] & 0xfffffffc);
         if(r[15] & 2) opcode >>= 16;
         else opcode &= 0xffff;
-        printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\n", opcode, r[15], r[14], r[13], r[0]);
-        r[15] += 2;
+        printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
 
         switch((opcode >> 13) & 7)
         {
@@ -2124,14 +2226,37 @@ void arm_cpu::tick()
             switch((opcode >> 11) & 3)
             {
             case 0:
+            {
                 printf("Thumb LSL\n");
                 break;
+            }
             case 1:
+            {
                 printf("Thumb LSR\n");
                 break;
+            }
             case 2:
+            {
                 printf("Thumb ASR\n");
+                u32 imm = (opcode >> 6) & 0x1f;
+                int rm = (opcode >> 3) & 7;
+                int rd = opcode & 7;
+
+                if(!imm)
+                {
+                    cpsr.carry = r[rm] & 0x80000000;
+                    if(!(r[rm] & 0x80000000)) r[rd] = 0;
+                    else r[rd] = 0xffffffff;
+                }
+                else
+                {
+                    cpsr.carry = r[rm] & (1 << (imm - 1));
+                    r[rd] = (s32)r[rm] >> imm;
+                }
+                cpsr.sign = r[rd] & (1 << 31);
+                cpsr.zero = r[rd] == 0;
                 break;
+            }
             case 3:
             {
                 if((opcode >> 9) & 1)
@@ -2141,8 +2266,33 @@ void arm_cpu::tick()
                 }
                 else
                 {
-                    if((opcode >> 10) & 1) printf("Thumb ADD\n");
-                    else printf("Thumb ADD_3\n");
+                    if((opcode >> 10) & 1)
+                    {
+                        printf("Thumb ADD\n");
+                        int rd = opcode & 7;
+                        int rn = (opcode >> 3) & 7;
+                        u32 imm = (opcode >> 6) & 7;
+                        u64 result64 = (u64)r[rn] + imm;
+                        r[rd] = (u32)result64;
+                        cpsr.zero = r[rd] == 0;
+                        cpsr.sign = r[rd] & 0x80000000;
+                        cpsr.carry = result64 & 0x100000000ULL;
+                        cpsr.overflow = (~(r[rn] ^ imm) & (r[rn] ^ r[rd]) & 0x80000000);
+                    }
+                    else
+                    {
+                        printf("Thumb ADD_3\n");
+                        int rm = (opcode >> 6) & 7;
+                        int rn = (opcode >> 3) & 7;
+                        int rd = opcode & 7;
+                        u64 result64 = (u64)r[rn] + r[rm];
+
+                        r[rd] = (u32)result64;
+                        cpsr.sign = r[rd] & 0x80000000;
+                        cpsr.zero = r[rd] == 0;
+                        cpsr.carry = result64 & 0x100000000ULL;
+                        cpsr.overflow = (~(r[rn] ^ r[rm]) & (r[rn] ^ r[rd]) & 0x80000000);
+                    }
                 }
                 break;
             }
@@ -2154,17 +2304,50 @@ void arm_cpu::tick()
             switch((opcode >> 11) & 3)
             {
             case 0:
+            {
                 printf("Thumb MOV\n");
+                u8 imm = opcode & 0xff;
+                int rd = (opcode >> 8) & 7;
+                r[rd] = imm;
+                if(!r[rd]) cpsr.zero = true;
+                else cpsr.zero = false;
+                if(r[rd] & 0x80000000) cpsr.sign = true;
+                else cpsr.sign = false;
                 break;
+            }
             case 1:
+            {
                 printf("Thumb CMP\n");
+                u32 imm = opcode & 0xff;
+                int rn = (opcode >> 8) & 7;
+                u64 result64 = (u64)r[rn] - imm;
+                u32 result = (u32)result64;
+                cpsr.sign = result & (1 << 31);
+                cpsr.zero = result == 0;
+                cpsr.carry = r[rn] < imm;
+                cpsr.overflow = (~(r[rn] ^ imm) & (r[rn] ^ result) & 0x80000000);
                 break;
+            }
             case 2:
+            {
                 printf("Thumb ADD_2\n");
+                int rd = (opcode >> 8) & 7;
+                u32 imm = opcode & 0xff;
+                u64 result64 = r[rd] + imm;
+                u32 oldrd = r[rd];
+                r[rd] = (u32)result64;
+
+                cpsr.sign = r[rd] & 0x80000000;
+                cpsr.zero = r[rd] == 0;
+                cpsr.carry = result64 & 0x100000000ULL;
+                cpsr.overflow = (~(oldrd ^ imm) & (oldrd ^ r[rd]) & 0x80000000);
                 break;
+            }
             case 3:
+            {
                 printf("Thumb SUB_2\n");
                 break;
+            }
             }
             break;
         }
@@ -2175,29 +2358,45 @@ void arm_cpu::tick()
                 switch((opcode >> 9) & 7)
                 {
                 case 0:
+                {
                     printf("Thumb STR_2\n");
                     break;
+                }
                 case 1:
+                {
                     printf("Thumb STRH_2\n");
                     break;
+                }
                 case 2:
+                {
                     printf("Thumb STRB_2\n");
                     break;
+                }
                 case 3:
+                {
                     printf("Thumb LDRSB\n");
                     break;
+                }
                 case 4:
+                {
                     printf("Thumb LDR_2\n");
                     break;
+                }
                 case 5:
+                {
                     printf("Thumb LDRH_2\n");
                     break;
+                }
                 case 6:
+                {
                     printf("Thumb LDRB_2\n");
                     break;
+                }
                 case 7:
+                {
                     printf("Thumb LDRSH\n");
                     break;
+                }
                 }
             }
             else
@@ -2210,14 +2409,40 @@ void arm_cpu::tick()
                         switch((opcode >> 8) & 3)
                         {
                         case 0:
+                        {
                             printf("Thumb ADD_4\n");
+                            int h1 = (opcode >> 7) & 1;
+                            int h2 = (opcode >> 6) & 1;
+                            int rm = ((opcode >> 3) & 7) | (h2 << 3);
+                            int rd = (opcode & 7) | (h1 << 3);
+                            r[rd] += r[rm];
                             break;
+                        }
                         case 1:
+                        {
                             printf("Thumb CMP_3\n");
+                            int h1 = (opcode >> 7) & 1;
+                            int h2 = (opcode >> 6) & 1;
+                            int rm = ((opcode >> 3) & 7) | (h2 << 3);
+                            int rn = (opcode & 7) | (h1 << 3);
+                            u64 result64 = (u64)r[rn] - r[rm];
+                            u32 result = (u32)result64;
+                            cpsr.sign = result & (1 << 31);
+                            cpsr.zero = result == 0;
+                            cpsr.carry = r[rn] < r[rm];
+                            cpsr.overflow = (~(r[rn] ^ r[rm]) & (r[rn] ^ result) & 0x80000000);
                             break;
+                        }
                         case 2:
-                            printf("Thumb CPY\n");
+                        {
+                            printf("Thumb MOV_3\n");
+                            int h1 = (opcode >> 7) & 1;
+                            int h2 = (opcode >> 6) & 1;
+                            int rd = (opcode & 7) | (h1 << 3);
+                            int rm = ((opcode >> 3) & 7) | (h1 << 3);
+                            r[rd] = r[rm];
                             break;
+                        }
                         case 3:
                         {
                             if((opcode >> 7) & 1)
@@ -2246,23 +2471,110 @@ void arm_cpu::tick()
                         switch((opcode >> 6) & 0xf)
                         {
                         case 0x0:
+                        {
                             printf("Thumb AND\n");
+                            int rm = (opcode >> 3) & 7;
+                            int rd = opcode & 7;
+                            r[rd] &= r[rm];
+                            cpsr.sign = r[rd] & 0x80000000;
+                            cpsr.zero = r[rd] == 0;
                             break;
+                        }
                         case 0x1:
+                        {
                             printf("Thumb EOR\n");
+                            int rm = (opcode >> 3) & 7;
+                            int rd = opcode & 7;
+                            r[rd] ^= r[rm];
+                            cpsr.sign = r[rd] & 0x80000000;
+                            cpsr.zero = r[rd] == 0;
                             break;
+                        }
                         case 0x2:
+                        {
                             printf("Thumb LSL_2\n");
+                            int rs = (opcode >> 3) & 7;
+                            int rd = opcode & 7;
+
+                            if((r[rs] & 0xff) < 32)
+                            {
+                                cpsr.carry = r[rd] & (1 << (32 - (r[rs] & 0xff)));
+                                r[rd] = r[rd] << (r[rs] & 0xff);
+                            }
+                            else if((r[rs] & 0xff) == 32)
+                            {
+                                cpsr.carry = r[rd] & 1;
+                                r[rd] = 0;
+                            }
+                            else
+                            {
+                                cpsr.carry = false;
+                                r[rd] = 0;
+                            }
+                            cpsr.sign = r[rd] & (1 << 31);
+                            cpsr.zero = r[rd] == 0;
                             break;
+                        }
                         case 0x3:
+                        {
                             printf("Thumb LSR_2\n");
+                            int rs = (opcode >> 3) & 7;
+                            int rd = opcode & 7;
+
+                            if((r[rs] & 0xff) < 32)
+                            {
+                                cpsr.carry = r[rd] & (1 << ((r[rs] & 0xff) - 1));
+                                r[rd] = r[rd] >> (r[rs] & 0xff);
+                            }
+                            else if((r[rs] & 0xff) == 32)
+                            {
+                                cpsr.carry = r[rd] & 0x80000000;
+                                r[rd] = 0;
+                            }
+                            else
+                            {
+                                cpsr.carry = false;
+                                r[rd] = 0;
+                            }
+                            cpsr.sign = r[rd] & (1 << 31);
+                            cpsr.zero = r[rd] == 0;
                             break;
+                        }
                         case 0x4:
+                        {
                             printf("Thumb ASR_2\n");
+                            int rs = (opcode >> 3) & 7;
+                            int rd = opcode & 7;
+
+                            if((r[rs] & 0xff) < 32)
+                            {
+                                cpsr.carry = r[rd] & (1 << ((r[rs] & 0xff) - 1));
+                                r[rd] = (s32)r[rd] >> (r[rs] & 0xff);
+                            }
+                            else
+                            {
+                                cpsr.carry = r[rd] & 0x80000000;
+                                if(!(r[rd] & 0x80000000)) r[rd] = 0;
+                                else r[rd] = 0xffffffff;
+                            }
+                            cpsr.sign = r[rd] & (1 << 31);
+                            cpsr.zero = r[rd] == 0;
                             break;
+                        }
                         case 0x5:
+                        {
                             printf("Thumb ADC\n");
+                            int rm = (opcode >> 3) & 7;
+                            int rd = opcode & 7;
+                            u32 oldrd = r[rd];
+                            u64 result64 = (u64)r[rd] + r[rm] + cpsr.carry;
+                            r[rd] = (u32)result64;
+                            cpsr.sign = r[rd] & 0x80000000;
+                            cpsr.zero = r[rd] == 0;
+                            cpsr.carry = result64 & 0x100000000ULL;
+                            cpsr.overflow = (~(oldrd ^ r[rm]) & (oldrd ^ r[rd]) & 0x80000000);
                             break;
+                        }
                         case 0x6:
                             printf("Thumb SBC\n");
                             break;
@@ -2276,20 +2588,54 @@ void arm_cpu::tick()
                             printf("Thumb NEG\n");
                             break;
                         case 0xa:
+                        {
                             printf("Thumb CMP_2\n");
+                            int rm = (opcode >> 3) & 7;
+                            int rn = opcode & 7;
+                            u64 result64 = (u64)r[rn] - r[rm];
+                            u32 result = (u32)result64;
+                            cpsr.sign = result & (1 << 31);
+                            cpsr.zero = result == 0;
+                            cpsr.carry = r[rn] < r[rm];
+                            cpsr.overflow = (~(r[rn] ^ r[rm]) & (r[rn] ^ result) & 0x80000000);
                             break;
+                        }
                         case 0xb:
+                        {
                             printf("Thumb CMN\n");
+                            int rm = (opcode >> 3) & 7;
+                            int rn = opcode & 7;
+                            u64 result64 = (u64)r[rn] + r[rm];
+                            u32 result = (u32)result64;
+                            cpsr.sign = result & 0x80000000;
+                            cpsr.zero = result == 0;
+                            cpsr.carry = result64 & 0x100000000ULL;
+                            cpsr.overflow = (~(r[rn] ^ r[rm]) & (r[rn] ^ result) & 0x80000000);
                             break;
+                        }
                         case 0xc:
-                            printf("Thumb ORR\n");
+                        {
+                            printf("Thumb AND\n");
+                            int rm = (opcode >> 3) & 7;
+                            int rd = opcode & 7;
+                            r[rd] |= r[rm];
+                            cpsr.sign = r[rd] & 0x80000000;
+                            cpsr.zero = r[rd] == 0;
                             break;
+                        }
                         case 0xd:
                             printf("Thumb MUL\n");
                             break;
                         case 0xe:
+                        {
                             printf("Thumb BIC\n");
+                            int rm = (opcode >> 3) & 7;
+                            int rd = opcode & 7;
+                            r[rd] &= ~r[rm];
+                            cpsr.sign = r[rd] & 0x80000000;
+                            cpsr.zero = r[rd] == 0;
                             break;
+                        }
                         case 0xf:
                             printf("Thumb MVN\n");
                             break;
@@ -2336,7 +2682,12 @@ void arm_cpu::tick()
                 case 0:
                 {
                     if((opcode >> 7) & 1) printf("Thumb SUB_4\n");
-                    else printf("Thumb ADD_7\n");
+                    else
+                    {
+                        printf("Thumb ADD_7\n");
+                        u32 imm = (opcode & 0x7f) << 2;
+                        r[13] = r[13] + imm;
+                    }
                     break;
                 }
                 case 1:
@@ -2379,15 +2730,56 @@ void arm_cpu::tick()
                 case 2:
                 {
                     if((opcode >> 11) & 1) printf("Thumb POP\n");
-                    else printf("Thumb PUSH\n");
+                    else
+                    {
+                        printf("Thumb PUSH\n");
+                        if((opcode >> 8) & 1)
+                        {
+                            r[13] -= 4;
+                            ww(r[13],r[14]);
+                        }
+
+                        for(int i = 7; i >= 0; i--)
+                        {
+                            if(opcode & (1 << i))
+                            {
+                                r[13] -= 4;
+                                ww(r[13],r[i]);
+                            }
+                        }
+                    }
                     break;
                 }
                 case 3:
                 {
-                    if((opcode >> 11) & 1) printf("Thumb BKPT\n");
+                    if((opcode >> 11) & 1)
+                    {
+                        printf("Thumb BKPT\n");
+                        r14_abt = r[15] + 4;
+                        spsr_abt.whole = cpsr.whole;
+                        cpsr.mode = mode_abort;
+                        cpsr.thumb = false;
+                        cpsr.irq_disable = true;
+                        cpsr.abort_disable = true;
+                        cpsr.endianness = cp15.control.endian_on_exception;
+                        r[15] = 0x0c;
+                    }
                     else
                     {
-                        if((opcode >> 5) & 1) printf("Thumb CPS\n");
+                        if((opcode >> 5) & 1)
+                        {
+                            printf("Thumb CPS\n");
+                            int imod = (opcode >> 4) & 1;
+                            int a = (opcode >> 2) & 1;
+                            int i = (opcode >> 1) & 1;
+                            int f = opcode & 1;
+                            if(cpsr.mode != mode_user)
+                            {
+                                if(a) cpsr.abort_disable = imod;
+                                if(i) cpsr.irq_disable = imod;
+                                if(f) cpsr.fiq_disable = imod;
+                            }
+                        }
                         else printf("Thumb SETEND\n");
                     }
                     break;
@@ -2396,8 +2788,21 @@ void arm_cpu::tick()
             }
             else
             {
-                if((opcode >> 11) & 1) printf("Thumb ADD_6\n");
-                else printf("Thumb ADD_5\n");
+                if((opcode >> 11) & 1)
+                {
+                    printf("Thumb ADD_6\n");
+                    u32 imm = (opcode & 0xff) << 2;
+                    int rd = (opcode >> 8) & 7;
+                    r[rd] = r[13] + imm;
+                }
+                else
+                {
+                    printf("Thumb ADD_5\n");
+                    u32 imm = (opcode & 0xff) << 2;
+                    int rd = (opcode >> 8) & 7;
+                    r[rd] = (r[15] & 0xfffffffc) + imm;
+
+                }
             }
             break;
         }
@@ -2513,6 +2918,7 @@ void arm_cpu::tick()
             break;
         }
         }
+        r[15] += 2;
     }
 }
 

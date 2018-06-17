@@ -119,7 +119,7 @@ int main(int ac, char** av)
         fclose(fp);*/
 
 
-        for(int i = 0; i < 50; i++)
+        for(int i = 0; i < 1000; i++)
         {
             cpu.run(1);
             dev->tick();
