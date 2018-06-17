@@ -4,7 +4,35 @@ void cp15_t::init()
 {
     //TODO
     control.whole = 0x000500f8;
-    control.unaligned_access_enable = 0;
+    peripheral_port_remap.whole = 0;
+}
+
+u32 cp15_t::decode_peripheral_port_size()
+{
+    switch(peripheral_port_remap.size)
+    {
+        case 0x00: return 0x00000000; break;
+        case 0x03: return 0x00001000; break;
+        case 0x04: return 0x00002000; break;
+        case 0x05: return 0x00004000; break;
+        case 0x06: return 0x00008000; break;
+        case 0x07: return 0x00010000; break;
+        case 0x08: return 0x00020000; break;
+        case 0x09: return 0x00040000; break;
+        case 0x0a: return 0x00080000; break;
+        case 0x0b: return 0x00100000; break;
+        case 0x0c: return 0x00200000; break;
+        case 0x0d: return 0x00400000; break;
+        case 0x0e: return 0x00800000; break;
+        case 0x0f: return 0x01000000; break;
+        case 0x10: return 0x02000000; break;
+        case 0x11: return 0x04000000; break;
+        case 0x12: return 0x08000000; break;
+        case 0x13: return 0x10000000; break;
+        case 0x14: return 0x20000000; break;
+        case 0x15: return 0x40000000; break;
+        case 0x16: return 0x80000000; break;
+    }
 }
 
 u32 cp15_t::read(int opcode1, int opcode2, int crn, int crm)
@@ -66,6 +94,7 @@ u32 cp15_t::read(int opcode1, int opcode2, int crn, int crm)
                             {
                                 case 0x0: return control.whole;
                             }
+                            break;
                         }
                     }
                     break;
@@ -85,7 +114,7 @@ u32 cp15_t::read(int opcode1, int opcode2, int crn, int crm)
                         {
                             switch(opcode2)
                             {
-                                case 0x4: return control.whole;
+                                case 0x4: return peripheral_port_remap.whole;
                             }
                             break;
                         }
@@ -116,7 +145,7 @@ void cp15_t::write(int opcode1, int opcode2, int crn, int crm, u32 data)
                         {
                             switch(opcode2)
                             {
-                                case 0x0: control.whole = data;
+                                case 0x0: control.whole = data; printf("CP15 control register written with data %08x\n", data); break;
                             }
                             break;
                         }
@@ -214,7 +243,7 @@ void cp15_t::write(int opcode1, int opcode2, int crn, int crm, u32 data)
                     {
                         case 0x2:
                         {
-                            if(opcode2 == 0x4) peripheral_port_remap = data;
+                            if(opcode2 == 0x4) peripheral_port_remap.whole = data;
                             break;
                         }
                     }

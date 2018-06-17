@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 #include <functional>
 #include <string>
@@ -10,6 +11,7 @@
 #include <climits>
 #include <cmath>
 #include <cassert>
+#include <utility>
 
 typedef uint8_t u8;
 typedef int8_t s8;

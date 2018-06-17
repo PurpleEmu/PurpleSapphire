@@ -12,7 +12,7 @@ void wdt_t::init()
 
 void wdt_t::tick()
 {
-    iphone2g* device = (iphone2g*) dev;
+    iphone2g* dev = (iphone2g*) device;
     if((ctrl & 0x100000) && ((ctrl & 0xff) != 0xa5))
     {
         cnt--;
@@ -22,7 +22,7 @@ void wdt_t::tick()
         if(cnt == 0)
         {
             cnt = cnt_period;
-            device->interrupt(0x33);
+            dev->interrupt(0x33, true);
         }
     }
 }

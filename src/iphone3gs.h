@@ -13,7 +13,7 @@ struct iphone3gs
 
     void tick();
 
-    //void interrupt(int num);
+    void interrupt(int num);
 };
 
 u32 iphone3gs_rw(void* dev, u32 addr);

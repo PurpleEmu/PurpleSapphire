@@ -71,7 +71,7 @@ void clock1_t::ww(u32 addr, u32 data)
         case 0x038: plls[2].cnt = data; break;
         case 0x03c: plls[3].cnt = data; break;
         case 0x040: pll_lock = data; break;
-        case 0x044: pll_mode = data; break;
+        case 0x044: pll_mode = data & 0xff; break;
         case 0x048: cl2_gates = data; break;
         case 0x04c: cl3_gates = data; break;
     }

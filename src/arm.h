@@ -3,15 +3,16 @@
 #include "common.h"
 #include "cp15.h"
 
-enum class arm_mode : u8
+enum arm_mode
 {
-    user = 0x10,
-    fiq = 0x11,
-    irq = 0x12,
-    supervisor = 0x13,
-    abort = 0x17,
-    undefined = 0x1b,
-    system = 0x1f
+    mode_user = 0x10,
+    mode_fiq = 0x11,
+    mode_irq = 0x12,
+    mode_supervisor = 0x13,
+    mode_monitor = 0x16,
+    mode_abort = 0x17,
+    mode_undefined = 0x1b,
+    mode_system = 0x1f
 };
 
 enum class arm_type
@@ -52,6 +53,7 @@ struct arm_cpu
     u32 r13_und, r14_und;
 
     bool fiq, irq, fiq_enable, irq_enable;
+    bool data_abort, abort_enable;
 
     arm_type type;
 

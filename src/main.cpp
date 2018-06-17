@@ -25,18 +25,18 @@ int main(int ac, char** av)
 
     if(dev_type == device_type::iphone2g)
     {
-        iphone2g dev;
+        iphone2g* dev = (iphone2g*)malloc(sizeof(iphone2g));
         arm_cpu cpu;
 
         cpu.init();
 
         cpu.type = arm_type::arm11;
 
-        dev.cpu = &cpu;
+        dev->cpu = &cpu;
 
-        dev.init();
+        dev->init();
 
-        cpu.device = &dev;
+        cpu.device = dev;
     
         cpu.rw_real = iphone2g_rw;
         cpu.ww_real = iphone2g_ww;
@@ -47,7 +47,7 @@ int main(int ac, char** av)
             printf("unable to open %s, are you sure it exists?\n", av[2]);
             return 3;
         }
-        if(fread(dev.bootrom, 1, 0x10000, fp) != 0x10000)
+        if(fread(dev->bootrom, 1, 0x10000, fp) != 0x10000)
         {
             fclose(fp);
             return 4;
@@ -60,7 +60,7 @@ int main(int ac, char** av)
             printf("unable to open %s, are you sure it exists?\n", av[3]);
             return 3;
         }
-        if(fread(dev.nor, 1, 0x100000, fp) != 0x100000)
+        if(fread(dev->nor, 1, 0x100000, fp) != 0x100000)
         {
             fclose(fp);
             return 4;
@@ -68,26 +68,26 @@ int main(int ac, char** av)
         fclose(fp);
 
 
-        for(int i = 0; i < 8000; i++)
+        for(int i = 0; i < 40000; i++)
         {
             cpu.run(1);
-            dev.tick();
+            dev->tick();
         }
     }
     else if(dev_type == device_type::iphone3gs)
     {
-        iphone3gs dev;
+        iphone3gs* dev = (iphone3gs*)malloc(sizeof(iphone3gs));
         arm_cpu cpu;
 
         cpu.init();
 
         cpu.type = arm_type::cortex_a8;
 
-        dev.cpu = &cpu;
+        dev->cpu = &cpu;
 
-        dev.init();
+        dev->init();
 
-        cpu.device = &dev;
+        cpu.device = dev;
     
         cpu.rw_real = iphone3gs_rw;
         cpu.ww_real = iphone3gs_ww;
@@ -98,7 +98,7 @@ int main(int ac, char** av)
             printf("unable to open %s, are you sure it exists?\n", av[2]);
             return 3;
         }
-        if(fread(dev.bootrom, 1, 0x10000, fp) != 0x10000)
+        if(fread(dev->bootrom, 1, 0x10000, fp) != 0x10000)
         {
             fclose(fp);
             return 4;
@@ -122,7 +122,7 @@ int main(int ac, char** av)
         for(int i = 0; i < 50; i++)
         {
             cpu.run(1);
-            dev.tick();
+            dev->tick();
         }
     }
 

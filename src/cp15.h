@@ -34,9 +34,21 @@ struct cp15_t
         u32 whole;
     } control;
 
-    u32 peripheral_port_remap;
+    union
+    {
+        struct
+        {
+            u32 size : 5;
+            u32 reserved : 7;
+            u32 base_addr : 20;
+        };
+        u32 whole;
+    } peripheral_port_remap;
 
     void init();
+
+    u32 decode_peripheral_port_size();
+
     u32 read(int opcode1, int opcode2, int crn, int crm);
     void write(int opcode1, int opcode2, int crn, int crm, u32 data);
 };
