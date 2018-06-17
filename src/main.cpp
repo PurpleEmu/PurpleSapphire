@@ -28,9 +28,9 @@ int main(int ac, char** av)
         iphone2g* dev = (iphone2g*)malloc(sizeof(iphone2g));
         arm_cpu cpu;
 
-        cpu.init();
-
         cpu.type = arm_type::arm11;
+
+        cpu.init();
 
         dev->cpu = &cpu;
 
@@ -79,9 +79,9 @@ int main(int ac, char** av)
         iphone3gs* dev = (iphone3gs*)malloc(sizeof(iphone3gs));
         arm_cpu cpu;
 
-        cpu.init();
-
         cpu.type = arm_type::cortex_a8;
+
+        cpu.init();
 
         dev->cpu = &cpu;
 
@@ -119,7 +119,7 @@ int main(int ac, char** av)
         fclose(fp);*/
 
 
-        for(int i = 0; i < 1000; i++)
+        for(int i = 0; i < 30000; i++)
         {
             cpu.run(1);
             dev->tick();

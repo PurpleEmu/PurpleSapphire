@@ -12,9 +12,18 @@ void arm_cpu::init()
     fiq = false;
     irq = false;
     data_abort = false;
+    undefined = false;
     fiq_enable = true;
     irq_enable = true;
     abort_enable = true;
+    undefined_enable = true;
+
+    switch(type)
+    {
+        case arm_type::arm11: fpsid.whole = 0x41012083; break;
+    }
+
+    cp15.type = type;
 
     cp15.init();
 }
@@ -407,7 +416,16 @@ void arm_cpu::tick()
         }
         }
         r[14] = r[15] + 8;
-        r[15] = 0x10;
+        switch(type)
+        {
+            case arm_type::arm11: cp15.control_arm11.high_vectors ? r[15] = 0xffff0010 : r[15] = 0x10; break;
+            case arm_type::cortex_a8: cp15.control_cortex_a8.high_vectors ? r[15] = 0xffff0010 : r[15] = 0x10; break;
+        }
+        switch(type)
+        {
+            case arm_type::arm11: cpsr.endianness = cp15.control_arm11.endian_on_exception; break;
+            case arm_type::cortex_a8: cpsr.endianness = cp15.control_cortex_a8.endian_on_exception; break;
+        }
         cpsr.thumb = false;
         cpsr.abort_disable = true;
         abort_enable = false;
@@ -500,9 +518,17 @@ void arm_cpu::tick()
         }
         }
         r[14] = r[15] + 4;
-        r[15] = 0x1c;
+        switch(type)
+        {
+            case arm_type::arm11: cp15.control_arm11.high_vectors ? r[15] = 0xffff001c : r[15] = 0x1c; break;
+            case arm_type::cortex_a8: cp15.control_cortex_a8.high_vectors ? r[15] = 0xffff001c : r[15] = 0x1c; break;
+        }
         cpsr.fiq_disable = true;
-        cpsr.endianness = cp15.control.endian_on_exception;
+        switch(type)
+        {
+            case arm_type::arm11: cpsr.endianness = cp15.control_arm11.endian_on_exception; break;
+            case arm_type::cortex_a8: cpsr.endianness = cp15.control_cortex_a8.endian_on_exception; break;
+        }
         fiq_enable = false;
         printf("ARM11 got FIQ!\n");
     }
@@ -594,11 +620,123 @@ void arm_cpu::tick()
         }
         }
         r[14] = r[15] + 4;
-        r[15] = 0x18;
+        switch(type)
+        {
+            case arm_type::arm11: cp15.control_arm11.high_vectors ? r[15] = 0xffff0018 : r[15] = 0x18; break;
+            case arm_type::cortex_a8: cp15.control_cortex_a8.high_vectors ? r[15] = 0xffff0018 : r[15] = 0x18; break;
+        }
         cpsr.irq_disable = true;
-        cpsr.endianness = cp15.control.endian_on_exception;
+        switch(type)
+        {
+            case arm_type::arm11: cpsr.endianness = cp15.control_arm11.endian_on_exception; break;
+            case arm_type::cortex_a8: cpsr.endianness = cp15.control_cortex_a8.endian_on_exception; break;
+        }
         irq_enable = false;
         printf("ARM11 got IRQ!\n");
+    }
+
+    if(undefined && undefined_enable)
+    {
+        arm_mode old_mode = cpsr.mode;
+
+        cpsr.mode = mode_undefined;
+
+        u32 saved_reg[15];
+
+        switch(old_mode)
+        {
+        case mode_user:
+        case mode_system:
+        {
+            for(int i = 0; i < 15; i++)
+            {
+                saved_reg[i] = r[i];
+            }
+            break;
+        }
+        case mode_fiq:
+        {
+            for(int i = 8; i < 15; i++)
+            {
+                saved_reg[i] = r[i];
+            }
+            break;
+        }
+        case mode_irq:
+        case mode_supervisor:
+        case mode_abort:
+        case mode_undefined:
+        {
+            for(int i = 13; i < 15; i++)
+            {
+                saved_reg[i] = r[i];
+            }
+            break;
+        }
+        }
+
+        switch(cpsr.mode)
+        {
+        case mode_user:
+        case mode_system:
+        {
+            for(int i = 0; i < 15; i++)
+            {
+                r[i] = saved_reg[i];
+            }
+            break;
+        }
+        case mode_fiq:
+        {
+            r8_fiq = saved_reg[8];
+            r9_fiq = saved_reg[9];
+            r10_fiq = saved_reg[10];
+            r11_fiq = saved_reg[11];
+            r12_fiq = saved_reg[12];
+            r13_fiq = saved_reg[13];
+            r14_fiq = saved_reg[14];
+            break;
+        }
+        case mode_irq:
+        {
+            r13_irq = saved_reg[13];
+            r14_irq = saved_reg[14];
+            break;
+        }
+        case mode_supervisor:
+        {
+            r13_svc = saved_reg[13];
+            r14_svc = saved_reg[14];
+            break;
+        }
+        case mode_abort:
+        {
+            r13_abt = saved_reg[13];
+            r14_abt = saved_reg[14];
+            break;
+        }
+        case mode_undefined:
+        {
+            r13_und = saved_reg[13];
+            r14_und = saved_reg[14];
+            break;
+        }
+        }
+        r[14] = r[15] + 4;
+        switch(type)
+        {
+            case arm_type::arm11: cp15.control_arm11.high_vectors ? r[15] = 0xffff0004 : r[15] = 0x04; break;
+            case arm_type::cortex_a8: cp15.control_cortex_a8.high_vectors ? r[15] = 0xffff0004 : r[15] = 0x04; break;
+        }
+        switch(type)
+        {
+            case arm_type::arm11: cpsr.endianness = cp15.control_arm11.endian_on_exception; break;
+            case arm_type::cortex_a8: cpsr.endianness = cp15.control_cortex_a8.endian_on_exception; break;
+        }
+        cpsr.thumb = false;
+        cpsr.jazelle = false;
+        cpsr.irq_disable = true;
+        undefined_enable = false;
     }
 
     if(!irq) irq_enable = true;
@@ -1849,11 +1987,11 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             u32 addr = get_load_store_addr(opcode);
                             u32 data = rw(addr & 0xfffffffc);
-                            if(!cp15.control.unaligned_access_enable && ((addr & 3) != 0))
+                            if(!cp15.control_arm11.unaligned_access_enable && ((addr & 3) != 0) && (type == arm_type::arm11))
                             {
                                 data = (data >> ((addr & 3) << 3)) | (data << (32 - ((addr & 3) << 3)));
                             }
-                            if(cp15.control.strict_alignment && ((addr & 3) != 0))
+                            if(cp15.control_arm11.strict_alignment && ((addr & 3) != 0) && (type == arm_type::arm11))
                             {
                                 data_abort = true;
                                 return;
@@ -2024,7 +2162,73 @@ void arm_cpu::tick()
                                 int CRn = (opcode >> 16) & 0xf;
                                 int opcode1 = (opcode >> 21) & 7;
 
-                                if(cp_index == 15)
+                                if(cp_index == 10)
+                                {
+                                    printf("VFP single-precision read\n");
+                                    switch(cp15.coprocessor_access_control.cp10)
+                                    {
+                                        case cp15_coprocessor_no_access:
+                                        case cp15_coprocessor_reserved:
+                                        {
+                                            undefined = true;
+                                            return;
+                                        }
+                                        case cp15_coprocessor_privileged_only:
+                                        {
+                                            switch(cpsr.mode)
+                                            {
+                                                case mode_user:
+                                                case mode_fiq:
+                                                case mode_irq:
+                                                case mode_abort:
+                                                {
+                                                    undefined = true;
+                                                    return;
+                                                }
+                                                case mode_supervisor:
+                                                case mode_monitor:
+                                                case mode_system:
+                                                {
+                                                    break;
+                                                }
+                                            }
+                                            break;
+                                        }
+                                        case cp15_coprocessor_privileged_and_user: break;
+                                    }
+                                }
+                                if(cp_index == 11)
+                                {
+                                    printf("VFP double-precision read\n");
+                                    switch(cp15.coprocessor_access_control.cp11)
+                                    {
+                                        case cp15_coprocessor_no_access:
+                                        case cp15_coprocessor_reserved:
+                                        {
+                                            undefined = true;
+                                            return;
+                                        }
+                                        case cp15_coprocessor_privileged_only:
+                                        {
+                                            switch(cpsr.mode)
+                                            {
+                                                case mode_user:
+                                                case mode_fiq:
+                                                case mode_irq:
+                                                case mode_abort:
+                                                    undefined = true;
+                                                    return;
+                                                case mode_supervisor:
+                                                case mode_monitor:
+                                                case mode_system:
+                                                    break;
+                                            }
+                                            break;
+                                        }
+                                        case cp15_coprocessor_privileged_and_user: break;
+                                    }
+                                }
+                                else if(cp_index == 15)
                                 {
                                     u32 data = cp15.read(opcode1, opcode2, CRn, CRm);
 
@@ -2042,6 +2246,72 @@ void arm_cpu::tick()
                                 int crn = (opcode >> 16) & 0xf;
                                 int opcode1 = (opcode >> 21) & 7;
 
+                                if(cp_index == 10)
+                                {
+                                    printf("VFP single-precision write\n");
+                                    switch(cp15.coprocessor_access_control.cp10)
+                                    {
+                                        case cp15_coprocessor_no_access:
+                                        case cp15_coprocessor_reserved:
+                                        {
+                                            undefined = true;
+                                            return;
+                                        }
+                                        case cp15_coprocessor_privileged_only:
+                                        {
+                                            switch(cpsr.mode)
+                                            {
+                                                case mode_user:
+                                                case mode_fiq:
+                                                case mode_irq:
+                                                case mode_abort:
+                                                    undefined = true;
+                                                    return;
+                                                case mode_supervisor:
+                                                case mode_monitor:
+                                                case mode_system:
+                                                    break;
+                                            }
+                                            break;
+                                        }
+                                        case cp15_coprocessor_privileged_and_user: break;
+                                    }
+                                }
+                                if(cp_index == 11)
+                                {
+                                    printf("VFP double-precision write\n");
+                                    switch(cp15.coprocessor_access_control.cp11)
+                                    {
+                                        case cp15_coprocessor_no_access:
+                                        case cp15_coprocessor_reserved:
+                                        {
+                                            undefined = true;
+                                            return;
+                                        }
+                                        case cp15_coprocessor_privileged_only:
+                                        {
+                                            switch(cpsr.mode)
+                                            {
+                                                case mode_user:
+                                                case mode_fiq:
+                                                case mode_irq:
+                                                case mode_abort:
+                                                {
+                                                    undefined = true;
+                                                    return;
+                                                }
+                                                case mode_supervisor:
+                                                case mode_monitor:
+                                                case mode_system:
+                                                {
+                                                    break;
+                                                }
+                                            }
+                                            break;
+                                        }
+                                        case cp15_coprocessor_privileged_and_user: break;
+                                    }
+                                }
                                 if(cp_index == 15) cp15.write(opcode1, opcode2, crn, crm, r[rd]);
                             }
                         }
@@ -2063,7 +2333,11 @@ void arm_cpu::tick()
             {
             case 0:
             {
-                if((opcode >> 16) & 1) printf("SETEND\n");
+                if((opcode >> 16) & 1)
+                {
+                    printf("SETEND\n");
+                    cpsr.endianness = (opcode >> 9) & 1;
+                }
                 else
                 {
                     printf("CPS\n");
@@ -2217,7 +2491,19 @@ void arm_cpu::tick()
         opcode = rw(r[15] & 0xfffffffc);
         if(r[15] & 2) opcode >>= 16;
         else opcode &= 0xffff;
-        printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
+        u32 opcode_2 = 0;
+        if(((opcode >> 13) & 7) == 7)
+        {
+            if((opcode >> 11) & 3)
+            {
+                opcode_2 = rw((r[15] + 2) & 0xfffffffc);
+                if((r[15] + 2) & 2) opcode_2 >>= 16;
+                else opcode_2 &= 0xffff;
+                printf("Opcode:%04x\nOpcode 2:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, opcode_2, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
+            }
+            else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
+        }
+        else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
 
         switch((opcode >> 13) & 7)
         {
@@ -2228,11 +2514,42 @@ void arm_cpu::tick()
             case 0:
             {
                 printf("Thumb LSL\n");
+                u32 imm = (opcode >> 6) & 0x1f;
+                int rm = (opcode >> 3) & 7;
+                int rd = opcode & 7;
+
+                if(imm == 0)
+                {
+                    r[rd] = r[rm];
+                }
+                else
+                {
+                    cpsr.carry = r[rm] & (1 << (32 - imm));
+                    r[rd] = r[rm] << imm;
+                }
+                cpsr.sign = r[rd] & (1 << 31);
+                cpsr.zero = r[rd] == 0;
                 break;
             }
             case 1:
             {
                 printf("Thumb LSR\n");
+                u32 imm = (opcode >> 6) & 0x1f;
+                int rm = (opcode >> 3) & 7;
+                int rd = opcode & 7;
+
+                if(imm == 0)
+                {
+                    cpsr.carry = r[rm] & (1 << 31);
+                    r[rd] = 0;
+                }
+                else
+                {
+                    cpsr.carry = r[rm] & (1 << (imm - 1));
+                    r[rd] = r[rm] >> imm;
+                }
+                cpsr.sign = r[rd] & (1 << 31);
+                cpsr.zero = r[rd] == 0;
                 break;
             }
             case 2:
@@ -2380,6 +2697,12 @@ void arm_cpu::tick()
                 case 4:
                 {
                     printf("Thumb LDR_2\n");
+                    int rd = opcode & 7;
+                    int rn = (opcode >> 3) & 7;
+                    int rm = (opcode >> 6) & 7;
+                    u32 addr = r[rn] + r[rm];
+                    u32 data = rw(addr & 0xfffffffc);
+                    r[rd] = (data >> ((addr & 3) << 3)) | (data << (32 - ((addr & 3) << 3)));
                     break;
                 }
                 case 5:
@@ -2401,7 +2724,15 @@ void arm_cpu::tick()
             }
             else
             {
-                if((opcode >> 11) & 1) printf("Thumb LDR_3\n");
+                if((opcode >> 11) & 1)
+                {
+                    printf("Thumb LDR_3\n");
+                    int rd = (opcode >> 8) & 7;
+                    u32 imm = opcode & 0xff;
+                    u32 addr = ((r[15] + 4) & 0xfffffffc) + (imm << 2);
+                    u32 data = rw(addr & 0xfffffffc);
+                    r[rd] = (data >> ((addr & 3) << 3)) | (data << (32 - ((addr & 3) << 3)));
+                }
                 else
                 {
                     if((opcode >> 10) & 1)
@@ -2615,7 +2946,7 @@ void arm_cpu::tick()
                         }
                         case 0xc:
                         {
-                            printf("Thumb AND\n");
+                            printf("Thumb ORR\n");
                             int rm = (opcode >> 3) & 7;
                             int rd = opcode & 7;
                             r[rd] |= r[rm];
@@ -2650,12 +2981,31 @@ void arm_cpu::tick()
             if((opcode >> 11) & 1)
             {
                 if((opcode >> 12) & 1) printf("Thumb LDRB\n");
-                else printf("Thumb LDR\n");
+                else
+                {
+                    printf("Thumb LDR\n");
+                    int rd = opcode & 7;
+                    int rn = (opcode >> 3) & 7;
+                    u32 imm = (opcode >> 6) & 0x1f;
+
+                    u32 addr = r[rn] + (imm << 2);
+                    u32 data = rw(addr & 0xfffffffc);
+                    r[rd] = (data >> ((addr & 3) << 3)) | (data << (32 - ((addr & 3) << 3)));
+                }
             }
             else
             {
                 if((opcode >> 12) & 1) printf("Thumb STRB\n");
-                else printf("Thumb STR\n");
+                else
+                {
+                    printf("Thumb STR\n");
+                    int rd = opcode & 7;
+                    int rn = (opcode >> 3) & 7;
+                    u32 imm = (opcode >> 6) & 0x1f;
+
+                    u32 addr = r[rn] + (imm << 2);
+                    ww(addr, r[rd]);
+                }
             }
             break;
         }
@@ -2663,7 +3013,15 @@ void arm_cpu::tick()
         {
             if((opcode >> 12) & 1)
             {
-                if((opcode >> 11) & 1) printf("Thumb LDR_4\n");
+                if((opcode >> 11) & 1)
+                {
+                    printf("Thumb LDR_4\n");
+                    int rd = (opcode >> 8) & 7;
+                    u32 imm = opcode & 0xff;
+                    u32 addr = r[13] + (imm << 2);
+                    u32 data = rw(addr & 0xfffffffc);
+                    r[rd] = (data >> ((addr & 3) << 3)) | (data << (32 - ((addr & 3) << 3)));
+                }
                 else printf("Thumb STR_3\n");
             }
             else
@@ -2681,7 +3039,12 @@ void arm_cpu::tick()
                 {
                 case 0:
                 {
-                    if((opcode >> 7) & 1) printf("Thumb SUB_4\n");
+                    if((opcode >> 7) & 1)
+                    {
+                        printf("Thumb SUB_4\n");
+                        u32 imm = (opcode & 0x7f) << 2;
+                        r[13] = r[13] - imm;
+                    }
                     else
                     {
                         printf("Thumb ADD_7\n");
@@ -2729,7 +3092,26 @@ void arm_cpu::tick()
                 }
                 case 2:
                 {
-                    if((opcode >> 11) & 1) printf("Thumb POP\n");
+                    if((opcode >> 11) & 1)
+                    {
+                        printf("Thumb POP\n");
+                        for(int i = 0; i < 8; i++)
+                        {
+                            if(opcode & (1 << i))
+                            {
+                                r[i] = rw(r[13]);
+                                r[13] += 4;
+                            }
+                        }
+
+                        if((opcode >> 8) & 1)
+                        {
+                            u32 data = rw(r[13]);
+                            r[15] = data & 0xfffffffe;
+                            cpsr.thumb = data & 1;
+                            r[13] += 4;
+                        }
+                    }
                     else
                     {
                         printf("Thumb PUSH\n");
@@ -2761,8 +3143,16 @@ void arm_cpu::tick()
                         cpsr.thumb = false;
                         cpsr.irq_disable = true;
                         cpsr.abort_disable = true;
-                        cpsr.endianness = cp15.control.endian_on_exception;
-                        r[15] = 0x0c;
+                        switch(type)
+                        {
+                            case arm_type::arm11: cpsr.endianness = cp15.control_arm11.endian_on_exception; break;
+                            case arm_type::cortex_a8: cpsr.endianness = cp15.control_cortex_a8.endian_on_exception; break;
+                        }
+                        switch(type)
+                        {
+                            case arm_type::arm11: r[15] = cp15.control_arm11.high_vectors ? 0xffff000c : 0x0c; break;
+                            case arm_type::cortex_a8: r[15] = cp15.control_cortex_a8.high_vectors ? 0xffff000c : 0x0c; break;
+                        }
                     }
                     else
                     {
@@ -2780,7 +3170,11 @@ void arm_cpu::tick()
                                 if(f) cpsr.fiq_disable = imod;
                             }
                         }
-                        else printf("Thumb SETEND\n");
+                        else
+                        {
+                            printf("Thumb SETEND\n");
+                            cpsr.endianness = (opcode >> 3) & 1;
+                        }
                     }
                     break;
                 }
@@ -2868,13 +3262,59 @@ void arm_cpu::tick()
                         cond_met = false;
                         break;
                     }
-                    if(cond_met) r[15] = (u32)(r[15] + ((s16)imm << 1));
+                    if(cond_met) r[15] = (u32)((r[15] + 2) + ((s16)imm << 1));
                 }
             }
             else
             {
-                if((opcode >> 11) & 1) printf("Thumb LDMIA\n");
-                else printf("Thumb STMIA\n");
+                if((opcode >> 11) & 1)
+                {
+                    printf("Thumb LDMIA\n");
+                    u8 reg_list = opcode & 0xff;
+                    int rn = (opcode >> 8) & 7;
+
+                    u32 count = 0;
+                    for(int i = 0; i < 8; i++)
+                    {
+                        if(reg_list & (1 << i)) count += 4;
+                    }
+
+                    u32 addr = r[rn];
+                    r[rn] += count;
+
+                    for(int i = 0; i < 8; i++)
+                    {
+                        if(reg_list & (1 << i))
+                        {
+                            r[i] = rw(addr);
+                            addr += 4;
+                        }
+                    }
+                }
+                else
+                {
+                    printf("Thumb STMIA\n");
+                    u8 reg_list = opcode & 0xff;
+                    int rn = (opcode >> 8) & 7;
+
+                    u32 count = 0;
+                    for(int i = 0; i < 8; i++)
+                    {
+                        if(reg_list & (1 << i)) count++;
+                    }
+
+                    u32 addr = r[rn];
+                    r[rn] += count << 2;
+
+                    for(int i = 0; i < 8; i++)
+                    {
+                        if(reg_list & (1 << i))
+                        {
+                            ww(addr, r[i]);
+                            addr += 4;
+                        }
+                    }
+                }
             }
             break;
         }
@@ -2886,9 +3326,9 @@ void arm_cpu::tick()
                 s32 imm = (opcode & 0x7ff) << 1;
                 if(imm & 0x800) imm |= 0xfffff000;
 
-                r[15] = (u32)(r[15] + imm);
+                r[15] = (u32)((r[15] + 2) + imm);
             }
-            else
+            else if(type == arm_type::arm11)
             {
                 printf("Thumb BLX\n");
                 u32 imm = opcode & 0x7ff;
@@ -2914,6 +3354,324 @@ void arm_cpu::tick()
                         r[14] = (u32)(r[15] + (imm << 12));
                     }
                 }
+            }
+            else if(type == arm_type::cortex_a8)
+            {
+                //32-bit thumb instruction
+                switch((opcode >> 11) & 3)
+                {
+                    case 1:
+                    {
+                        break;
+                    }
+                    case 2:
+                    {
+                        if((opcode_2 >> 15) & 1)
+                        {
+                            switch((opcode_2 >> 12) & 7)
+                            {
+                                case 0:
+                                {
+                                    if(((opcode >> 7) & 7) != 7)
+                                    {
+                                        printf("Thumb2 B\n");
+                                    }
+                                    else
+                                    {
+                                        switch((opcode >> 5) & 0x3f)
+                                        {
+                                            case 0b011100:
+                                            {
+                                                printf("Thumb2 MSR\n");
+                                                break;
+                                            }
+                                            case 0b011101:
+                                            {
+                                                if((opcode >> 4) & 1)
+                                                {
+                                                    switch((opcode_2 >> 4) & 0xf)
+                                                    {
+                                                        case 0:
+                                                        {
+                                                            printf("ThumbEE LEAVEX\n");
+                                                            break;
+                                                        }
+                                                        case 1:
+                                                        {
+                                                            printf("ThumbEE ENTERX\n");
+                                                            break;
+                                                        }
+                                                        case 2:
+                                                        {
+                                                            printf("Thumb CLREX\n");
+                                                            break;
+                                                        }
+                                                        case 4:
+                                                        {
+                                                            printf("Thumb DSB\n");
+                                                            break;
+                                                        }
+                                                        case 5:
+                                                        {
+                                                            printf("Thumb DMB\n");
+                                                            break;
+                                                        }
+                                                        case 6:
+                                                        {
+                                                            printf("Thumb ISB\n");
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    if((opcode_2 >> 8) & 7) printf("Thumb2 CPS\n");
+                                                    else
+                                                    {
+                                                        switch(opcode_2 & 0xff)
+                                                        {
+                                                            default:
+                                                            case 0x00:
+                                                            {
+                                                                printf("Thumb2 NOP\n");
+                                                                break;
+                                                            }
+                                                            case 0x01:
+                                                               {
+                                                                printf("Thumb YIELD\n");
+                                                                break;
+                                                            }
+                                                            case 0x02:
+                                                            {
+                                                                printf("Thumb2 WFE\n");
+                                                                break;
+                                                            }
+                                                            case 0x03:
+                                                            {
+                                                                printf("Thumb2 WFI\n");
+                                                                break;
+                                                            }
+                                                            case 0x04:
+                                                            {
+                                                                printf("Thumb2 SEV\n");
+                                                                break;
+                                                            }
+                                                            case 0xf0: case 0xf1: case 0xf2: case 0xf3:
+                                                            case 0xf4: case 0xf5: case 0xf6: case 0xf7:
+                                                            case 0xf8: case 0xf9: case 0xfa: case 0xfb:
+                                                            case 0xfc: case 0xfd: case 0xfe: case 0xff:
+                                                            {
+                                                                printf("Thumb DBG\n");
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                break;
+                                            }
+                                            case 0b011110:
+                                            {
+                                                if(!((opcode >> 4) & 1)) printf("Thumb2 BXJ\n");
+                                                else
+                                                {
+                                                    if(!(opcode_2 & 0xff)) printf("Thumb2 ERET\n");
+                                                    else printf("Thumb2 SUBS PC, LR\n");
+                                                }
+                                                break;
+                                            }
+                                            case 0b011111:
+                                            {
+                                                printf("Thumb2 MRS\n");
+                                                break;
+                                            }
+                                            case 0b111111:
+                                            {
+                                                if((opcode >> 4) & 1) printf("Thumb SMC\n");
+                                                else printf("Thumb HVC\n");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    break;
+                                }
+                                case 1: case 3:
+                                {
+                                    printf("Thumb2 B\n");
+                                    break;
+                                }
+                                case 2:
+                                {
+                                    if(((opcode >> 7) & 7) != 7)
+                                    {
+                                        printf("Thumb2 B\n");
+                                    }
+                                    else
+                                    {
+                                        switch((opcode >> 5) & 0x3f)
+                                        {
+                                            case 0b011100:
+                                            {
+                                                printf("Thumb2 MSR\n");
+                                                break;
+                                            }
+                                            case 0b011101:
+                                            {
+                                                if((opcode >> 4) & 1)
+                                                {
+                                                    switch((opcode_2 >> 4) & 0xf)
+                                                    {
+                                                        case 0:
+                                                        {
+                                                            printf("ThumbEE LEAVEX\n");
+                                                            break;
+                                                        }
+                                                        case 1:
+                                                        {
+                                                            printf("ThumbEE ENTERX\n");
+                                                            break;
+                                                        }
+                                                        case 2:
+                                                        {
+                                                            printf("Thumb CLREX\n");
+                                                            break;
+                                                        }
+                                                        case 4:
+                                                        {
+                                                            printf("Thumb DSB\n");
+                                                            break;
+                                                        }
+                                                        case 5:
+                                                        {
+                                                            printf("Thumb DMB\n");
+                                                            break;
+                                                        }
+                                                        case 6:
+                                                        {
+                                                            printf("Thumb ISB\n");
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    if((opcode_2 >> 8) & 7) printf("Thumb2 CPS\n");
+                                                    else
+                                                    {
+                                                        switch(opcode_2 & 0xff)
+                                                        {
+                                                            default:
+                                                            case 0x00:
+                                                            {
+                                                                printf("Thumb2 NOP\n");
+                                                                break;
+                                                            }
+                                                            case 0x01:
+                                                               {
+                                                                printf("Thumb YIELD\n");
+                                                                break;
+                                                            }
+                                                            case 0x02:
+                                                            {
+                                                                printf("Thumb2 WFE\n");
+                                                                break;
+                                                            }
+                                                            case 0x03:
+                                                            {
+                                                                printf("Thumb2 WFI\n");
+                                                                break;
+                                                            }
+                                                            case 0x04:
+                                                            {
+                                                                printf("Thumb2 SEV\n");
+                                                                break;
+                                                            }
+                                                            case 0xf0: case 0xf1: case 0xf2: case 0xf3:
+                                                            case 0xf4: case 0xf5: case 0xf6: case 0xf7:
+                                                            case 0xf8: case 0xf9: case 0xfa: case 0xfb:
+                                                            case 0xfc: case 0xfd: case 0xfe: case 0xff:
+                                                            {
+                                                                printf("Thumb DBG\n");
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                break;
+                                            }
+                                            case 0b011110:
+                                            {
+                                                if(!((opcode >> 4) & 1)) printf("Thumb2 BXJ\n");
+                                                else
+                                                {
+                                                    if(!(opcode_2 & 0xff)) printf("Thumb2 ERET\n");
+                                                    else printf("Thumb2 SUBS PC, LR\n");
+                                                }
+                                                break;
+                                            }
+                                            case 0b011111:
+                                            {
+                                                printf("Thumb2 MRS\n");
+                                                break;
+                                            }
+                                            case 0b111111:
+                                            {
+                                                printf("Thumb2 UNDEFINED\n");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    break;
+                                }
+                                case 4: case 6:
+                                {
+                                    printf("Thumb2 BLX\n");
+                                    int j1 = (opcode_2 >> 13) & 1;
+                                    int j2 = (opcode_2 >> 11) & 1;
+                                    int s = (opcode >> 10) & 1;
+
+                                    int i1 = !(j1 ^ s);
+                                    int i2 = !(j2 ^ s);
+                                    u32 imm_10h = opcode & 0x3ff;
+                                    u32 imm_10l = (opcode_2 >> 1) & 0x3ff;
+                                    int h = opcode_2 & 1;
+                                    if(h)
+                                    {
+                                        printf("This instruction is UNDEFINED\n");
+                                        return;
+                                    }
+                                    u32 imm_32 = (s << 24) | (i1 << 23) | (i2 << 22) | (imm_10h << 12) | (imm_10l << 2);
+                                    if(imm_32 & (1 << 24)) imm_32 |= 0xfe000000;
+                                    r[14] = ((r[15] + 4) & 0xfffffffe) | 1;
+                                    r[15] += (s32)imm_32;
+                                    r[15] &= 0xfffffffc;
+                                    cpsr.thumb = false;
+                                    break;
+                                }
+                                case 5: case 7:
+                                {
+                                    printf("Thumb2 BL\n");
+                                    int j1 = (opcode_2 >> 13) & 1;
+                                    int j2 = (opcode_2 >> 11) & 1;
+                                    int s = (opcode >> 10) & 1;
+
+                                    int i1 = !(j1 ^ s);
+                                    int i2 = !(j2 ^ s);
+                                    u32 imm_10 = opcode & 0x3ff;
+                                    u32 imm_11 = opcode_2 & 0x7ff;
+                                    u32 imm_32 = (s << 24) | (i1 << 23) | (i2 << 22) | (imm_10 << 12) | (imm_11 << 1);
+                                    if(imm_32 & (1 << 24)) imm_32 |= 0xfe000000;
+                                    r[14] = ((r[15] + 2) & 0xfffffffe) | 1;
+                                    r[15] += (s32)imm_32;
+                                    break;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case 3:
+                    {
+                        break;
+                    }
+                }
+                r[15] += 2;
             }
             break;
         }

@@ -29,12 +29,7 @@ u32 iphone3gs_rw(void* dev, u32 addr)
         return device->amc0[(addr+0) & 0x7fffff] | (device->amc0[(addr+1) & 0x7fffff] << 8)
         | (device->amc0[(addr+2) & 0x7fffff] << 16) | (device->amc0[(addr+3) & 0x7fffff] << 24);
     }
-    else if(addr >= (device->cpu->cp15.peripheral_port_remap.base_addr << 12)
-    && addr < ((device->cpu->cp15.peripheral_port_remap.base_addr << 12) + device->cpu->cp15.decode_peripheral_port_size()))
-    {
-        u32 periph_addr = addr - (device->cpu->cp15.peripheral_port_remap.base_addr << 12);
-        printf("Unknown peripheral port address %08x; peripheral port at %08x\n", addr, (device->cpu->cp15.peripheral_port_remap.base_addr << 12));
-    }
+    else if(addr == 0xbf500000) return 0xfffffeff; //FIXME: find the real chipid. bit 8 is disabled because i don't want to have to deal with wfi instructions lol
     else printf("Unknown address %08x!\n", addr);
     return 0;
 }
@@ -42,13 +37,7 @@ u32 iphone3gs_rw(void* dev, u32 addr)
 void iphone3gs_ww(void* dev, u32 addr, u32 data)
 {
     iphone3gs* device = (iphone3gs*) dev;
-    if(addr >= (device->cpu->cp15.peripheral_port_remap.base_addr << 12)
-    && addr < ((device->cpu->cp15.peripheral_port_remap.base_addr << 12) + device->cpu->cp15.decode_peripheral_port_size()))
-    {
-        u32 periph_addr = addr - (device->cpu->cp15.peripheral_port_remap.base_addr << 12);
-        printf("Unknown peripheral port address %08x data %08x; peripheral port at %08x\n", addr, data, (device->cpu->cp15.peripheral_port_remap.base_addr << 12));
-    }
-    else if(addr >= 0x84000000 && addr < 0x84800000)
+    if(addr >= 0x84000000 && addr < 0x84800000)
     {
         printf("AMC0 write %08x data %08x\n", addr, data);
         device->amc0[(addr+0) & 0x7fffff] = (data >> 0) & 0xff;
