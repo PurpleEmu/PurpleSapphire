@@ -37,6 +37,37 @@ void iphone2g::init()
     cpu->cp15.peripheral_port_remap.whole = 0x38000012;
 }
 
+void iphone2g::init_hle()
+{
+    u32 magic = iphone2g_rw(this, 0x9);
+    u32 full_size = iphone2g_rw(this, 0x4);
+    u32 size_no_pack = iphone2g_rw(this, 0x8);
+    u32 sig_check_area = iphone2g_rw(this, 0xc);
+    u32 ident = iphone2g_rw(this, 0x10);
+
+    u64 addr = 0x14;
+
+    bool found_data_tag = false;
+
+    while(!found_data_tag)
+    {
+        u32 tag_magic = iphone2g_rw(this, addr);
+        addr += 4;
+        u32 total_length = iphone2g_rw(this, addr);
+        addr += 4;
+        u32 data_length = iphone2g_rw(this, addr);
+        addr += 4;
+        //tag.data = (u8*)malloc(tag.data_length);
+        //memcpy(tag.data, iboot + addr, tag.data_length);
+        if(tag_magic == 0x44415441) //DATA
+        {
+            cpu->r[15] = addr;
+            found_data_tag = true;
+        }
+        else addr += total_length - 12;
+    }
+}
+
 void iphone2g::tick()
 {
     wdt.tick();
@@ -68,6 +99,11 @@ u32 iphone2g_rw(void* dev, u32 addr)
     {
         return device->bootrom[(addr+0) & 0xffff] | (device->bootrom[(addr+1) & 0xffff] << 8)
         | (device->bootrom[(addr+2) & 0xffff] << 16) | (device->bootrom[(addr+3) & 0xffff] << 24);
+    }
+    else if(addr >= 0x18000000 && addr < 0x18048000)
+    {
+        return device->iboot[(addr+0) - 0x18000000] | (device->iboot[(addr+1) - 0x18000000] << 8)
+        | (device->iboot[(addr+2) - 0x18000000] << 16) | (device->iboot[(addr+3) - 0x18000000] << 24);
     }
     else if(addr >= 0x22000000 && addr < 0x22400000)
     {

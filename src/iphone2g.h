@@ -15,6 +15,7 @@ struct iphone2g
     u8 bootrom[0x10000];
     u8 amc0[0x400000];
     u8 nor[0x100000];
+    u8 iboot[0x48000];
 
     arm_cpu* cpu;
 
@@ -28,6 +29,7 @@ struct iphone2g
     usb_phy_t usb_phy;
 
     void init();
+    void init_hle();
 
     void tick();
 

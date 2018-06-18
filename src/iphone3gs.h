@@ -7,6 +7,7 @@ struct iphone3gs
 {
     u8 bootrom[0x10000];
     u8 amc0[0x800000];
+    u8 nor[0x100000];
 
     arm_cpu* cpu;
 

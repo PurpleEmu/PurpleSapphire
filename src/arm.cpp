@@ -20,8 +20,27 @@ void arm_cpu::init()
 
     switch(type)
     {
-        case arm_type::arm11: fpsid.whole = 0x41012083; break;
+        case arm_type::arm11:
+        {
+            fpsid.whole = 0x41012083;
+            mvfr0.whole = 0x11111111;
+            mvfr1_arm11.whole = 0x00000000;
+            break;
+        }
+        case arm_type::cortex_a8:
+        {
+            fpsid.whole = 0x410330c3;
+            mvfr0.whole = 0x11110222;
+            mvfr1_cortex_a8.whole = 0x00011111;
+            break;
+        }
     }
+
+    fpscr.whole = 0;
+    fpexc.whole = 0;
+
+    fpinst = 0xee000a00;
+    fpinst2 = 0;
 
     cp15.type = type;
 
@@ -742,6 +761,7 @@ void arm_cpu::tick()
     if(!irq) irq_enable = true;
     if(!fiq) fiq_enable = true;
     if(!data_abort) abort_enable = true;
+    if(!undefined) undefined_enable = true;
 
     u32 opcode = 0;
     //for(int i = 0; i < 14; i++)
@@ -2164,7 +2184,7 @@ void arm_cpu::tick()
 
                                 if(cp_index == 10)
                                 {
-                                    printf("VFP single-precision read\n");
+                                    printf("VFP single-precision read register %02x\n");
                                     switch(cp15.coprocessor_access_control.cp10)
                                     {
                                         case cp15_coprocessor_no_access:
@@ -2196,6 +2216,250 @@ void arm_cpu::tick()
                                         }
                                         case cp15_coprocessor_privileged_and_user: break;
                                     }
+                                    int vfp_reg_select = (opcode >> 7) & 1;
+                                    switch(opcode1)
+                                    {
+                                        case 0:
+                                        {
+                                            printf("FMRS\n");
+                                            r[rd] = vfp_r[CRn].w[vfp_reg_select];
+                                            break;
+                                        }
+                                        case 7:
+                                        {
+                                            printf("FMRX\n");
+                                            int vfp_rn = (CRn << 1) | vfp_reg_select;
+                                            switch(type)
+                                            {
+                                                case arm_type::arm11:
+                                                {
+                                                    if(!fpexc.vfp_enable)
+                                                    {
+                                                        switch(cpsr.mode)
+                                                        {
+                                                        case mode_user:
+                                                        case mode_fiq:
+                                                        case mode_irq:
+                                                        case mode_abort:
+                                                        {
+                                                            undefined = true;
+                                                            return;
+                                                        }
+                                                        case mode_supervisor:
+                                                        case mode_monitor:
+                                                        case mode_undefined:
+                                                        case mode_system:
+                                                        {
+                                                            break;
+                                                        }
+                                                        }
+                                                    }
+                                                    switch(vfp_rn)
+                                                    {
+                                                        case 0:
+                                                        {
+                                                            r[rd] = fpsid.whole;
+                                                            break;
+                                                        }
+                                                        case 1:
+                                                        {
+                                                            r[rd] = fpscr.whole;
+                                                            break;
+                                                        }
+                                                        case 6:
+                                                        {
+                                                            r[rd] = mvfr1_arm11.whole;
+                                                            break;
+                                                        }
+                                                        case 7:
+                                                        {
+                                                            r[rd] = mvfr0.whole;
+                                                            break;
+                                                        }
+                                                        case 8:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_system:
+                                                            case mode_undefined:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            r[rd] = fpexc.whole;
+                                                            break;
+                                                        }
+                                                        case 9:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_system:
+                                                            case mode_undefined:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            r[rd] = fpinst;
+                                                            break;
+                                                        }
+                                                        case 10:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_system:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            r[rd] = fpinst2;
+                                                            break;
+                                                        }
+                                                    }
+                                                    break;
+                                                }
+                                                case arm_type::cortex_a8:
+                                                {
+                                                    switch(vfp_rn)
+                                                    {
+                                                        case 0:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_undefined:
+                                                            case mode_system:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            r[rd] = fpsid.whole;
+                                                            break;
+                                                        }
+                                                        case 1:
+                                                        {
+                                                            if(!fpexc.vfp_enable)
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            r[rd] = fpscr.whole;
+                                                            break;
+                                                        }
+                                                        case 6:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_undefined:
+                                                            case mode_system:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            r[rd] = mvfr1_cortex_a8.whole;
+                                                            break;
+                                                        }
+                                                        case 7:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_undefined:
+                                                            case mode_system:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            r[rd] = mvfr0.whole;
+                                                            break;
+                                                        }
+                                                        case 8:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_system:
+                                                            case mode_undefined:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            r[rd] = fpexc.whole;
+                                                            break;
+                                                        }
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                            break;
+                                        }
+                                    }
                                 }
                                 if(cp_index == 11)
                                 {
@@ -2226,6 +2490,21 @@ void arm_cpu::tick()
                                             break;
                                         }
                                         case cp15_coprocessor_privileged_and_user: break;
+                                    }
+                                    switch(opcode1)
+                                    {
+                                    case 0:
+                                    {
+                                        printf("FMRDL\n");
+                                        r[rd] = vfp_r[CRn].w[0];
+                                        break;
+                                    }
+                                    case 1:
+                                    {
+                                        printf("FMRDH\n");
+                                        r[rd] = vfp_r[CRn].w[1];
+                                        break;
+                                    }
                                     }
                                 }
                                 else if(cp_index == 15)
@@ -2276,6 +2555,166 @@ void arm_cpu::tick()
                                         }
                                         case cp15_coprocessor_privileged_and_user: break;
                                     }
+                                    int vfp_reg_select = (opcode >> 7) & 1;
+                                    switch(opcode1)
+                                    {
+                                        case 0:
+                                        {
+                                            printf("FMSR\n");
+                                            vfp_r[crn].w[vfp_reg_select] = r[rd];
+                                            break;
+                                        }
+                                        case 7:
+                                        {
+                                            printf("FMXR\n");
+                                            int vfp_rn = (crn << 1) | vfp_reg_select;
+                                            switch(type)
+                                            {
+                                                case arm_type::arm11:
+                                                {
+                                                    if(!fpexc.vfp_enable)
+                                                    {
+                                                        switch(cpsr.mode)
+                                                        {
+                                                        case mode_user:
+                                                        case mode_fiq:
+                                                        case mode_irq:
+                                                        case mode_abort:
+                                                        {
+                                                            undefined = true;
+                                                            return;
+                                                        }
+                                                        case mode_supervisor:
+                                                        case mode_monitor:
+                                                        case mode_undefined:
+                                                        case mode_system:
+                                                        {
+                                                            break;
+                                                        }
+                                                        }
+                                                    }
+                                                    switch(vfp_rn)
+                                                    {
+                                                        case 1:
+                                                        {
+                                                            fpscr.whole = r[rd];
+                                                            break;
+                                                        }
+                                                        case 8:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_system:
+                                                            case mode_undefined:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            fpexc.whole = r[rd];
+                                                            break;
+                                                        }
+                                                        case 9:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_system:
+                                                            case mode_undefined:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            fpinst = r[rd];
+                                                            break;
+                                                        }
+                                                        case 10:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_system:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            fpinst2 = r[rd];
+                                                            break;
+                                                        }
+                                                    }
+                                                    break;
+                                                }
+                                                case arm_type::cortex_a8:
+                                                {
+                                                    switch(vfp_rn)
+                                                    {
+                                                        case 1:
+                                                        {
+                                                            if(!fpexc.vfp_enable)
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            fpscr.whole = r[rd];
+                                                            break;
+                                                        }
+                                                        case 8:
+                                                        {
+                                                            switch(cpsr.mode)
+                                                            {
+                                                            case mode_user:
+                                                            case mode_fiq:
+                                                            case mode_irq:
+                                                            case mode_abort:
+                                                            {
+                                                                undefined = true;
+                                                                return;
+                                                            }
+                                                            case mode_supervisor:
+                                                            case mode_monitor:
+                                                            case mode_system:
+                                                            case mode_undefined:
+                                                            {
+                                                                break;
+                                                            }
+                                                            }
+                                                            fpexc.whole = r[rd];
+                                                            break;
+                                                        }
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                            break;
+                                        }
+                                    }
                                 }
                                 if(cp_index == 11)
                                 {
@@ -2310,6 +2749,21 @@ void arm_cpu::tick()
                                             break;
                                         }
                                         case cp15_coprocessor_privileged_and_user: break;
+                                    }
+                                    switch(opcode1)
+                                    {
+                                    case 0:
+                                    {
+                                        printf("FMDLR\n");
+                                        vfp_r[crn].w[0] = r[rd];
+                                        break;
+                                    }
+                                    case 1:
+                                    {
+                                        printf("FMDHR\n");
+                                        vfp_r[crn].w[1] = r[rd];
+                                        break;
+                                    }
                                     }
                                 }
                                 if(cp_index == 15) cp15.write(opcode1, opcode2, crn, crm, r[rd]);
