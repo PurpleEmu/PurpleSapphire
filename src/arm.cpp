@@ -1330,14 +1330,19 @@ void arm_cpu::tick()
                                         {
                                         case mode_fiq:
                                             r[rd] = spsr ? spsr_fiq.whole : cpsr.whole;
+                                            break;
                                         case mode_irq:
                                             r[rd] = spsr ? spsr_irq.whole : cpsr.whole;
+                                            break;
                                         case mode_supervisor:
                                             r[rd] = spsr ? spsr_svc.whole : cpsr.whole;
+                                            break;
                                         case mode_abort:
                                             r[rd] = spsr ? spsr_abt.whole : cpsr.whole;
+                                            break;
                                         case mode_undefined:
                                             r[rd] = spsr ? spsr_und.whole : cpsr.whole;
+                                            break;
                                         }
                                     }
                                     break;
@@ -2192,7 +2197,6 @@ void arm_cpu::tick()
 
                                 if(cp_index == 10)
                                 {
-                                    printf("VFP single-precision read register %02x\n");
                                     switch(cp15.coprocessor_access_control.cp10)
                                     {
                                         case cp15_coprocessor_no_access:
@@ -2470,7 +2474,6 @@ void arm_cpu::tick()
                                 }
                                 if(cp_index == 11)
                                 {
-                                    printf("VFP double-precision read\n");
                                     switch(cp15.coprocessor_access_control.cp11)
                                     {
                                         case cp15_coprocessor_no_access:
@@ -2534,7 +2537,6 @@ void arm_cpu::tick()
 
                                 if(cp_index == 10)
                                 {
-                                    printf("VFP single-precision write\n");
                                     switch(cp15.coprocessor_access_control.cp10)
                                     {
                                         case cp15_coprocessor_no_access:
@@ -2724,7 +2726,6 @@ void arm_cpu::tick()
                                 }
                                 if(cp_index == 11)
                                 {
-                                    printf("VFP double-precision write\n");
                                     switch(cp15.coprocessor_access_control.cp11)
                                     {
                                         case cp15_coprocessor_no_access:

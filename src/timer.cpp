@@ -4,7 +4,7 @@
 void timer::init()
 {
     count = 0;
-
+    state = 0;
 }
 
 void timer::tick()
@@ -49,7 +49,7 @@ void timers_t::init()
     for(int i = 0; i < 7; i++)
     {
         timers[i].device = device;
-        if(timers[i].state & 1) timers[i].init();
+        timers[i].init();
     }
 }
 
@@ -58,7 +58,7 @@ void timers_t::tick()
     //interrupt 0x07
     for(int i = 0; i < 7; i++)
     {
-        timers[i].tick();
+        if(timers[i].state & 1) timers[i].tick();
     }
 }
 

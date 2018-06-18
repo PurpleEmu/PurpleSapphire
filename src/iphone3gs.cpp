@@ -5,6 +5,11 @@ void iphone3gs::init()
     //TODO
 }
 
+void iphone3gs::exit()
+{
+    //TODO
+}
+
 void iphone3gs::tick()
 {
     //TODO

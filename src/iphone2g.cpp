@@ -3,6 +3,12 @@
 void iphone2g::init()
 {
     //TODO
+    bootrom = (u8*)malloc(0x08000000);
+    amc0 = (u8*)malloc(0x00400000);
+    nor = (u8*)malloc(0x00100000);
+    iboot = (u8*)malloc(0x00048000);
+    ram = (u8*)malloc(0x08000000);
+
     vics[0].init();
     vics[1].init();
 
@@ -38,10 +44,19 @@ void iphone2g::init()
     hle = false;
 }
 
+void iphone2g::exit()
+{
+    free(bootrom);
+    free(amc0);
+    free(nor);
+    free(iboot);
+    free(ram);
+}
+
 void iphone2g::init_hle()
 {
     hle = true;
-    cpu->hle = true;
+    cpu->init_hle();
 
     u32 magic = iphone2g_rw(this, 0x18000009);
     u32 full_size = iphone2g_rw(this, 0x18000004);
@@ -106,7 +121,7 @@ u32 iphone2g_rw(void* dev, u32 addr)
         return device->bootrom[(addr+0) & 0xffff] | (device->bootrom[(addr+1) & 0xffff] << 8)
         | (device->bootrom[(addr+2) & 0xffff] << 16) | (device->bootrom[(addr+3) & 0xffff] << 24);
     }
-    else if(device->hle && (addr < 0x80000))
+    else if(device->hle && (addr < 0x08000000))
     {
          return device->bootrom[(addr+0) & 0x7ffffff] | (device->bootrom[(addr+1) & 0x7ffffff] << 8)
         | (device->bootrom[(addr+2) & 0x7ffffff] << 16) | (device->bootrom[(addr+3) & 0x7ffffff] << 24);
@@ -217,7 +232,7 @@ u32 iphone2g_rw(void* dev, u32 addr)
 void iphone2g_ww(void* dev, u32 addr, u32 data)
 {
     iphone2g* device = (iphone2g*) dev;
-    if((addr < 0x80000) && device->hle)
+    if((addr < 0x08000000) && device->hle)
     {
         device->bootrom[(addr+0) & 0x7ffffff] = (data >> 0) & 0xff;
         device->bootrom[(addr+1) & 0x7ffffff] = (data >> 8) & 0xff;

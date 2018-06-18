@@ -12,6 +12,7 @@ struct iphone3gs
     arm_cpu* cpu;
 
     void init();
+    void exit();
 
     void tick();
 

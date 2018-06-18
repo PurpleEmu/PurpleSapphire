@@ -32,6 +32,7 @@ u32 spi_t::rw(u32 addr)
         case 0x34: return cnt;
         case 0x38: return idd;
     }
+    return 0;
 }
 
 void spi_t::ww(u32 addr, u32 data)
@@ -62,6 +63,5 @@ void spi_t::ww(u32 addr, u32 data)
         case 0x30: clk_div = data; break;
         case 0x34: cnt = data; break;
         case 0x38: idd = data; break;
-
     }
 }

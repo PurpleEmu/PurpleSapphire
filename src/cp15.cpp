@@ -38,6 +38,7 @@ u32 cp15_t::decode_peripheral_port_size()
         case 0x15: return 0x40000000; break;
         case 0x16: return 0x80000000; break;
     }
+    return 0;
 }
 
 u32 cp15_t::read(int opcode1, int opcode2, int crn, int crm)
@@ -104,6 +105,7 @@ u32 cp15_t::read(int opcode1, int opcode2, int crn, int crm)
                                         case arm_type::arm11: return control_arm11.whole;
                                         case arm_type::cortex_a8: return control_cortex_a8.whole;
                                     }
+                                    break;
                                 }
                                 case 0x1:
                                 {
@@ -112,6 +114,7 @@ u32 cp15_t::read(int opcode1, int opcode2, int crn, int crm)
                                         case arm_type::arm11: return aux_control_arm11.whole;
                                         case arm_type::cortex_a8: return aux_control_cortex_a8.whole;
                                     }
+                                    break;
                                 }
                                 case 0x2: return coprocessor_access_control.whole;
                             }
@@ -238,8 +241,8 @@ void cp15_t::write(int opcode1, int opcode2, int crn, int crm, u32 data)
                                 {
                                     switch(type)
                                     {
-                                        case arm_type::arm11: control_arm11.whole = (data & 0x33e70b0f) | 0x00000078;
-                                        case arm_type::cortex_a8: control_cortex_a8.whole = (data & 0x72003c07) | 0x00c50078 | (control_cortex_a8.whole & 0x08000000);
+                                        case arm_type::arm11: control_arm11.whole = (data & 0x33e70b0f) | 0x00000078; break;
+                                        case arm_type::cortex_a8: control_cortex_a8.whole = (data & 0x72003c07) | 0x00c50078 | (control_cortex_a8.whole & 0x08000000); break;
                                     }
                                     break;
                                 }
@@ -247,8 +250,8 @@ void cp15_t::write(int opcode1, int opcode2, int crn, int crm, u32 data)
                                 {
                                     switch(type)
                                     {
-                                        case arm_type::arm11: aux_control_arm11.whole = data & 0xf000007f;
-                                        case arm_type::cortex_a8: aux_control_cortex_a8.whole = (data & 0x0001fffff) | (aux_control_cortex_a8.whole & 0xc0000000);
+                                        case arm_type::arm11: aux_control_arm11.whole = data & 0xf000007f; break;
+                                        case arm_type::cortex_a8: aux_control_cortex_a8.whole = (data & 0x0001fffff) | (aux_control_cortex_a8.whole & 0xc0000000); break;
                                     }
                                     break;
                                 }

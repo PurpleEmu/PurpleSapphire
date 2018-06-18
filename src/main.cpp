@@ -13,7 +13,7 @@ int main(int ac, char** av)
     if(ac < 5)
     {
         printf("usage: %s [device] <path_to_bootrom> <path_to_nor> <path_to_iboot>\n", av[0]);
-        printf("device can be \"iphone2g\", \"iphone2giboot\", \"iphone3gs\", or \"iphone3gsiboot\". No other devices are supported at this time.\n");
+        printf("device can be \"iphone2g\", \"iphone2ghle\", \"iphone3gs\", or \"iphone3gshle\". No other devices are supported at this time.\n");
         return 1;
     }
 
@@ -25,7 +25,7 @@ int main(int ac, char** av)
         dev_type = device_type::iphone2g;
         bootromhle = false;
     }
-    else if(device == "iphone2giboot")
+    else if(device == "iphone2ghle")
     {
         dev_type = device_type::iphone2g;
         bootromhle = true;
@@ -35,7 +35,7 @@ int main(int ac, char** av)
         dev_type = device_type::iphone3gs;
         bootromhle = false;
     }
-    else if(device == "iphone3gsiboot")
+    else if(device == "iphone3gshle")
     {
         dev_type = device_type::iphone3gs;
         bootromhle = true;
@@ -98,15 +98,16 @@ int main(int ac, char** av)
         if(bootromhle)
         {
             fseek(fp, 0, SEEK_END);
-            u64 filesize = ftell(fp);
+            s64 filesize = ftell(fp);
             fseek(fp, 0, SEEK_SET);
+            if(filesize == -1) return 5;
             if(fread(dev->iboot, 1, filesize, fp) != filesize)
             {
                 fclose(fp);
                 return 4;
             }
             fclose(fp);
-            
+
             dev->init_hle();
         }
 
@@ -126,6 +127,9 @@ int main(int ac, char** av)
                 dev->tick();
             }
         }
+
+        dev->exit();
+        free(dev);
     }
     else if(dev_type == device_type::iphone3gs)
     {
@@ -177,6 +181,9 @@ int main(int ac, char** av)
             cpu.run(1);
             dev->tick();
         }
+
+        dev->exit();
+        free(dev);
     }
 
     return 0;

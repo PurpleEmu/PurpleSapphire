@@ -24,6 +24,8 @@ void vic::init()
     current_intr = 33;
     current_highest_intr = 33;
     stack_i = 0;
+
+    daisy_input = 0;
     
     priority = 0x10;
     address = 0;

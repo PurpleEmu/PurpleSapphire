@@ -14,6 +14,7 @@ u32 gpio_t::rw(u32 addr)
     if((addr & 0xfff) == 0x0e0) return int_type;
     if((addr & 0xfff) == 0x2c4) return state[0].state;
     if((addr & 0xfff) == 0x320) return fsel;
+    return 0;
 }
 
 void gpio_t::ww(u32 addr, u32 data)
