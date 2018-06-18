@@ -1,5 +1,7 @@
 #include "arm.h"
 
+#define printf(...) do{ if(!((r[15] >= 0x18000000) && (r[15] < 0x18048000)) && hle) printf(__VA_ARGS__); } while(0)
+
 void arm_cpu::init()
 {
     for(int i = 0; i < 16; i++)
@@ -45,6 +47,11 @@ void arm_cpu::init()
     cp15.type = type;
 
     cp15.init();
+}
+
+void arm_cpu::init_hle()
+{
+    hle = true;
 }
 
 u32 arm_cpu::rw(u32 addr)
@@ -1370,9 +1377,10 @@ void arm_cpu::tick()
                                     printf("BLX_2\n");
                                     int rm = opcode & 0xf;
 
-                                    r[14] = (r[15] + 2) | 1;
-                                    r[15] = r[rm] & 0xfffffffe;
+                                    u32 oldpc = r[15];
+                                    r[15] = (r[rm] - 4) & 0xfffffffe;
                                     cpsr.thumb = r[rm] & 1;
+                                    r[14] = oldpc + 4;
                                     break;
                                 }
                                 case 5:
@@ -2228,7 +2236,6 @@ void arm_cpu::tick()
                                         case 7:
                                         {
                                             printf("FMRX\n");
-                                            int vfp_rn = (CRn << 1) | vfp_reg_select;
                                             switch(type)
                                             {
                                                 case arm_type::arm11:
@@ -2254,7 +2261,7 @@ void arm_cpu::tick()
                                                         }
                                                         }
                                                     }
-                                                    switch(vfp_rn)
+                                                    switch(CRn)
                                                     {
                                                         case 0:
                                                         {
@@ -2349,7 +2356,7 @@ void arm_cpu::tick()
                                                 }
                                                 case arm_type::cortex_a8:
                                                 {
-                                                    switch(vfp_rn)
+                                                    switch(CRn)
                                                     {
                                                         case 0:
                                                         {
@@ -2567,7 +2574,6 @@ void arm_cpu::tick()
                                         case 7:
                                         {
                                             printf("FMXR\n");
-                                            int vfp_rn = (crn << 1) | vfp_reg_select;
                                             switch(type)
                                             {
                                                 case arm_type::arm11:
@@ -2593,7 +2599,7 @@ void arm_cpu::tick()
                                                         }
                                                         }
                                                     }
-                                                    switch(vfp_rn)
+                                                    switch(crn)
                                                     {
                                                         case 1:
                                                         {
@@ -2673,7 +2679,7 @@ void arm_cpu::tick()
                                                 }
                                                 case arm_type::cortex_a8:
                                                 {
-                                                    switch(vfp_rn)
+                                                    switch(crn)
                                                     {
                                                         case 1:
                                                         {
@@ -2946,7 +2952,7 @@ void arm_cpu::tick()
         if(r[15] & 2) opcode >>= 16;
         else opcode &= 0xffff;
         u32 opcode_2 = 0;
-        if(((opcode >> 13) & 7) == 7)
+        if((((opcode >> 13) & 7) == 7) && (type == arm_type::cortex_a8))
         {
             if((opcode >> 11) & 3)
             {
@@ -3243,9 +3249,20 @@ void arm_cpu::tick()
                             {
                                 printf("Thumb BX\n");
                                 int rm = (opcode >> 3) & 0xf;
-
-                                r[15] = r[rm] & 0xfffffffe;
-                                cpsr.thumb = r[rm] & 1;
+                                if(rm != 15)
+                                {
+                                    r[15] = (r[rm] - 2) & 0xfffffffe;
+                                    cpsr.thumb = r[rm] & 1;
+                                }
+                                else
+                                {
+                                    u32 oldpc = r[15];
+                                    r[15] = (r[15] + 2) & 0xfffffffe;
+                                    if(!(oldpc & 3))
+                                    {
+                                        cpsr.thumb = false;
+                                    }
+                                }
                             }
                             break;
                         }
@@ -3790,22 +3807,29 @@ void arm_cpu::tick()
 
                 if(h)
                 {
-                    if(h != 2)
+                    switch(h)
                     {
-                        u32 lr = (r[15] - 2) | 1;
-                        r[15] = r[14] + (imm << 1);
-                        r[14] = lr;
-
-                        if(h == 1)
+                        case 1:
                         {
-                            r[15] &= 0xfffffffc;
+                            u32 oldpc = r[15];
+                            r[15] = (r[14] + (imm << 1)) & 0xfffffffc;
+                            r[14] = (oldpc) | 1;
                             cpsr.thumb = false;
+                            break;
                         }
-                    }
-                    else
-                    {
-                        if(imm & 0x400) imm |= 0xfffff800;
-                        r[14] = (u32)(r[15] + (imm << 12));
+                        case 2:
+                        {
+                            if(imm & 0x400) imm |= 0xfffff800;
+                            r[14] = r[15] + (imm << 12);
+                            break;
+                        }
+                        case 3:
+                        {
+                            u32 oldpc = r[15];
+                            r[15] = (r[14] + (imm << 1)) + 2;
+                            r[14] = (oldpc + 2) | 1;
+                            break;
+                        }
                     }
                 }
             }

@@ -17,6 +17,8 @@ enum arm_mode
 
 struct arm_cpu
 {
+    bool hle;
+
     union
     {
         struct
@@ -187,6 +189,7 @@ struct arm_cpu
     std::function<void(void*,u32,u32)> ww_real;
 
     void init();
+    void init_hle();
 
     u32 rw(u32 addr);
     void ww(u32 addr, u32 data);

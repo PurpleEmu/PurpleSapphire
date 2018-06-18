@@ -238,7 +238,7 @@ void cp15_t::write(int opcode1, int opcode2, int crn, int crm, u32 data)
                                 {
                                     switch(type)
                                     {
-                                        case arm_type::arm11: control_arm11.whole = (data & 0xf3e7ff8f) | 0x00000070;
+                                        case arm_type::arm11: control_arm11.whole = (data & 0x33e70b0f) | 0x00000078;
                                         case arm_type::cortex_a8: control_cortex_a8.whole = (data & 0x72003c07) | 0x00c50078 | (control_cortex_a8.whole & 0x08000000);
                                     }
                                     break;
@@ -397,6 +397,33 @@ void cp15_t::write(int opcode1, int opcode2, int crn, int crm, u32 data)
                                 case 0x2:
                                 {
                                     printf("Clean data cache line by index\n");
+                                    break;
+                                }
+                                case 0x4:
+                                {
+                                    printf("Data Synchronization Barrier\n");
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                        case 0xe:
+                        {
+                            switch(opcode2)
+                            {
+                                case 0x0:
+                                {
+                                    if(type == arm_type::arm11) printf("Clean and Invalidate entire data cache\n");
+                                    break;
+                                }
+                                case 0x1:
+                                {
+                                    printf("Clean and Invalidate data cache line by MVA\n");
+                                    break;
+                                }
+                                case 0x2:
+                                {
+                                    printf("Clean and Invalidate data cache line by index\n");
                                     break;
                                 }
                             }

@@ -32,8 +32,7 @@ struct cp15_t
             u32 mmu_enable : 1;
             u32 strict_alignment : 1;
             u32 l1_data_cache_enable : 1;
-            u32 write_buffer_enable : 1;
-            u32 reserved1 : 3;
+            u32 reserved1 : 4;
             u32 endian : 1;
             u32 system_protection : 1;
             u32 rom_protection : 1;

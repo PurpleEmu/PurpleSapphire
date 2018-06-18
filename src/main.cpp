@@ -106,14 +106,25 @@ int main(int ac, char** av)
                 return 4;
             }
             fclose(fp);
-
+            
             dev->init_hle();
         }
 
-        for(int i = 0; i < 40000; i++)
+        if(!bootromhle)
         {
-            cpu.run(1);
-            dev->tick();
+            for(int i = 0; i < 40000; i++)
+            {
+                cpu.run(1);
+                dev->tick();
+            }
+        }
+        else
+        {
+            for(int i = 0; i < 300000; i++)
+            {
+                cpu.run(1);
+                dev->tick();
+            }
         }
     }
     else if(dev_type == device_type::iphone3gs)

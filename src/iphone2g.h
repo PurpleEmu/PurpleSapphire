@@ -12,12 +12,15 @@
 
 struct iphone2g
 {
-    u8 bootrom[0x10000];
+    u8 bootrom[0x8000000];
     u8 amc0[0x400000];
     u8 nor[0x100000];
     u8 iboot[0x48000];
+    u8 ram[0x8000000];
 
     arm_cpu* cpu;
+
+    bool hle;
 
     vic vics[2];
     clock0_t clock0;

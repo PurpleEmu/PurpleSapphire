@@ -35,17 +35,21 @@ void iphone2g::init()
     usb_phy.init();
 
     cpu->cp15.peripheral_port_remap.whole = 0x38000012;
+    hle = false;
 }
 
 void iphone2g::init_hle()
 {
-    u32 magic = iphone2g_rw(this, 0x9);
-    u32 full_size = iphone2g_rw(this, 0x4);
-    u32 size_no_pack = iphone2g_rw(this, 0x8);
-    u32 sig_check_area = iphone2g_rw(this, 0xc);
-    u32 ident = iphone2g_rw(this, 0x10);
+    hle = true;
+    cpu->hle = true;
 
-    u64 addr = 0x14;
+    u32 magic = iphone2g_rw(this, 0x18000009);
+    u32 full_size = iphone2g_rw(this, 0x18000004);
+    u32 size_no_pack = iphone2g_rw(this, 0x18000008);
+    u32 sig_check_area = iphone2g_rw(this, 0x1800000c);
+    u32 ident = iphone2g_rw(this, 0x18000010);
+
+    u64 addr = 0x18000014;
 
     bool found_data_tag = false;
 
@@ -92,13 +96,25 @@ void iphone2g::interrupt(int num, bool level)
     }
 }
 
+#define printf(...) do{ if(!((device->cpu->r[15] >= 0x18000000) && (device->cpu->r[15] < 0x18048000)) && device->hle) printf(__VA_ARGS__); } while(0)
+
 u32 iphone2g_rw(void* dev, u32 addr)
 {
     iphone2g* device = (iphone2g*) dev;
-    if((addr < 0x10000) || (addr >= 0x20000000 && addr < 0x20010000))
+    if(((addr < 0x10000) && !device->hle) || (addr >= 0x20000000 && addr < 0x20010000))
     {
         return device->bootrom[(addr+0) & 0xffff] | (device->bootrom[(addr+1) & 0xffff] << 8)
         | (device->bootrom[(addr+2) & 0xffff] << 16) | (device->bootrom[(addr+3) & 0xffff] << 24);
+    }
+    else if(device->hle && (addr < 0x80000))
+    {
+         return device->bootrom[(addr+0) & 0x7ffffff] | (device->bootrom[(addr+1) & 0x7ffffff] << 8)
+        | (device->bootrom[(addr+2) & 0x7ffffff] << 16) | (device->bootrom[(addr+3) & 0x7ffffff] << 24);
+    }
+    else if(addr >= 0x08000000 && addr < 0x10000000)
+    {
+        return device->ram[(addr+0) - 0x08000000] | (device->ram[(addr+1) - 0x08000000] << 8)
+        | (device->ram[(addr+2) - 0x08000000] << 16) | (device->ram[(addr+3) - 0x08000000] << 24);
     }
     else if(addr >= 0x18000000 && addr < 0x18048000)
     {
@@ -189,6 +205,11 @@ u32 iphone2g_rw(void* dev, u32 addr)
         }
         else printf("Unknown peripheral port address %08x; peripheral port at %08x\n", addr, (device->cpu->cp15.peripheral_port_remap.base_addr << 12));
     }
+    else if(addr >= 0x88000000 && addr < 0x90000000)
+    {
+        return device->ram[(addr+0) - 0x88000000] | (device->ram[(addr+1) - 0x88000000] << 8)
+        | (device->ram[(addr+2) - 0x88000000] << 16) | (device->ram[(addr+3) - 0x88000000] << 24);
+    }
     else printf("Unknown address %08x!\n", addr);
     return 0;
 }
@@ -196,7 +217,21 @@ u32 iphone2g_rw(void* dev, u32 addr)
 void iphone2g_ww(void* dev, u32 addr, u32 data)
 {
     iphone2g* device = (iphone2g*) dev;
-    if(addr >= 0x22000000 && addr < 0x22400000)
+    if((addr < 0x80000) && device->hle)
+    {
+        device->bootrom[(addr+0) & 0x7ffffff] = (data >> 0) & 0xff;
+        device->bootrom[(addr+1) & 0x7ffffff] = (data >> 8) & 0xff;
+        device->bootrom[(addr+2) & 0x7ffffff] = (data >> 16) & 0xff;
+        device->bootrom[(addr+3) & 0x7ffffff] = (data >> 24) & 0xff;
+    }
+    else if(addr >= 0x08000000 && addr < 0x10000000)
+    {
+        device->ram[(addr+0) & 0x7ffffff] = (data >> 0) & 0xff;
+        device->ram[(addr+1) & 0x7ffffff] = (data >> 8) & 0xff;
+        device->ram[(addr+2) & 0x7ffffff] = (data >> 16) & 0xff;
+        device->ram[(addr+3) & 0x7ffffff] = (data >> 24) & 0xff;
+    }
+    else if(addr >= 0x22000000 && addr < 0x22400000)
     {
         printf("AMC0 write %08x data %08x\n", addr, data);
         device->amc0[(addr+0) & 0x3fffff] = (data >> 0) & 0xff;
@@ -264,6 +299,13 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
             device->gpio.ww(addr & 0xfff, data);
         }
         else printf("Unknown peripheral port address %08x data %08x; peripheral port at %08x\n", addr, data, (device->cpu->cp15.peripheral_port_remap.base_addr << 12));
+    }
+    else if(addr >= 0x80000000 && addr < 0x88000000)
+    {
+        device->ram[(addr+0) & 0x7ffffff] = (data >> 0) & 0xff;
+        device->ram[(addr+1) & 0x7ffffff] = (data >> 8) & 0xff;
+        device->ram[(addr+2) & 0x7ffffff] = (data >> 16) & 0xff;
+        device->ram[(addr+3) & 0x7ffffff] = (data >> 24) & 0xff;
     }
     else printf("Unknown address %08x data %08x!\n", addr, data);
 }
