@@ -21,6 +21,9 @@ struct iphone2g
     arm_cpu* cpu;
 
     bool hle;
+    bool do_print;
+
+    FILE* serial_buffer_log;
 
     vic vics[2];
     clock0_t clock0;

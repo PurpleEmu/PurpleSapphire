@@ -11,6 +11,9 @@ struct iphone3gs
 
     arm_cpu* cpu;
 
+    bool hle;
+    bool do_print;
+
     void init();
     void exit();
 

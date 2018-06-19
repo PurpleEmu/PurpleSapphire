@@ -3,8 +3,8 @@
 
 void spi_t::init()
 {
-    cmd = ctrl = setup = status = pin
-    = tx_data = rx_data = clk_div = cnt = idd = 0;
+    cmd = ctrl = setup = status = pin = tx_data = rx_data = clk_div
+    = cnt = idd = 0;
 }
 
 u32 spi_t::rw(u32 addr)

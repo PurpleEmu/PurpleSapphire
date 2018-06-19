@@ -1,13 +1,20 @@
 #include "iphone2g.h"
 
+#define printf(...) do{ if(do_print) printf(__VA_ARGS__); } while(0)
+
 void iphone2g::init()
 {
     //TODO
     bootrom = (u8*)malloc(0x08000000);
+    memset(bootrom, 0, 0x08000000);
     amc0 = (u8*)malloc(0x00400000);
+    memset(amc0, 0, 0x00400000);
     nor = (u8*)malloc(0x00100000);
+    memset(nor, 0, 0x00100000);
     iboot = (u8*)malloc(0x00048000);
+    memset(iboot, 0, 0x00048000);
     ram = (u8*)malloc(0x08000000);
+    memset(ram, 0, 0x08000000);
 
     vics[0].init();
     vics[1].init();
@@ -42,6 +49,68 @@ void iphone2g::init()
 
     cpu->cp15.peripheral_port_remap.whole = 0x38000012;
     hle = false;
+    do_print = true;
+}
+
+void iphone2g::init_hle()
+{
+    hle = true;
+    wdt.init_hle();
+
+    u32 magic = iphone2g_rw(this, 0x18000000);
+    if(magic == 0x496D6732) //IMG2
+    {
+        printf("iBoot is in IMG2 format\n");
+        u32 image_type = iphone2g_rw(this, 0x18000004);
+        u16 security_epoch = iphone2g_rw(this, 0x18000008) >> 16;
+        u32 flags1 = iphone2g_rw(this, 0x1800000c);
+        u32 data_length_padded = iphone2g_rw(this, 0x18000010);
+        u32 data_length = iphone2g_rw(this, 0x18000014);
+        u32 index = iphone2g_rw(this, 0x18000018);
+        u32 flags2 = iphone2g_rw(this, 0x1800001c);
+        
+        u32 addr = 0x18000400;
+
+        memcpy(bootrom, iboot + 0x400, data_length_padded);
+
+        cpu->r[15] = 0;
+        do_print = true;
+        cpu->init_hle(true);
+    }
+    else if(magic == 0x496d6733) //IMG3
+    {
+        printf("iBoot is in IMG3 format\n");
+        u32 full_size = iphone2g_rw(this, 0x18000004);
+        u32 size_no_pack = iphone2g_rw(this, 0x18000008);
+        u32 sig_check_area = iphone2g_rw(this, 0x1800000c);
+        u32 ident = iphone2g_rw(this, 0x18000010);
+
+        u32 addr = 0x18000014;
+
+        bool found_data_tag = false;
+
+        while(!found_data_tag)
+        {
+            u32 tag_magic = iphone2g_rw(this, addr);
+            addr += 4;
+            u32 total_length = iphone2g_rw(this, addr);
+            addr += 4;
+            u32 data_length = iphone2g_rw(this, addr);
+            addr += 4;
+            //tag.data = (u8*)malloc(tag.data_length);
+            //memcpy(tag.data, iboot + addr, tag.data_length);
+            if(tag_magic == 0x44415441) //DATA
+            {
+                cpu->r[15] = addr;
+                found_data_tag = true;
+            }
+            else addr += total_length - 12;
+        }
+        do_print = false;
+        cpu->init_hle(false);
+    }
+
+    serial_buffer_log = fopen("ibootlog.txt","w+");
 }
 
 void iphone2g::exit()
@@ -51,40 +120,7 @@ void iphone2g::exit()
     free(nor);
     free(iboot);
     free(ram);
-}
-
-void iphone2g::init_hle()
-{
-    hle = true;
-    cpu->init_hle();
-
-    u32 magic = iphone2g_rw(this, 0x18000009);
-    u32 full_size = iphone2g_rw(this, 0x18000004);
-    u32 size_no_pack = iphone2g_rw(this, 0x18000008);
-    u32 sig_check_area = iphone2g_rw(this, 0x1800000c);
-    u32 ident = iphone2g_rw(this, 0x18000010);
-
-    u64 addr = 0x18000014;
-
-    bool found_data_tag = false;
-
-    while(!found_data_tag)
-    {
-        u32 tag_magic = iphone2g_rw(this, addr);
-        addr += 4;
-        u32 total_length = iphone2g_rw(this, addr);
-        addr += 4;
-        u32 data_length = iphone2g_rw(this, addr);
-        addr += 4;
-        //tag.data = (u8*)malloc(tag.data_length);
-        //memcpy(tag.data, iboot + addr, tag.data_length);
-        if(tag_magic == 0x44415441) //DATA
-        {
-            cpu->r[15] = addr;
-            found_data_tag = true;
-        }
-        else addr += total_length - 12;
-    }
+    if(hle) fclose(serial_buffer_log);
 }
 
 void iphone2g::tick()
@@ -102,16 +138,34 @@ void iphone2g::interrupt(int num, bool level)
         if(level) vics[0].raw_intr |= 1 << num;
         else vics[0].raw_intr &= ~(1 << num);
         vics[0].update();
+        switch(cpu->type)
+        {
+            case arm_type::arm11:
+            {
+                if(cpu->cp15.control_arm11.intr_vectored_mode_enable)
+                    cpu->r[15] = vics[0].vect_addr[num];
+                break;
+            }
+        }
     }
     else
     {
         if(level) vics[1].raw_intr |= 1 << (num & 0x1f);
         else vics[1].raw_intr &= ~(1 << (num & 0x1f));
         vics[1].update();
+        switch(cpu->type)
+        {
+            case arm_type::arm11:
+            {
+                if(cpu->cp15.control_arm11.intr_vectored_mode_enable)
+                    cpu->r[15] = vics[0].daisy_vect_addr;
+                break;
+            }
+        }
     }
 }
-
-#define printf(...) do{ if(!((device->cpu->r[15] >= 0x18000000) && (device->cpu->r[15] < 0x18048000)) && device->hle) printf(__VA_ARGS__); } while(0)
+#undef printf
+#define printf(...) do{ if(device->do_print) printf(__VA_ARGS__); } while(0)
 
 u32 iphone2g_rw(void* dev, u32 addr)
 {
@@ -241,10 +295,34 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
     }
     else if(addr >= 0x08000000 && addr < 0x10000000)
     {
+        if(addr == 0x0fffbf50) fprintf(stdout, "RAM access to stack addr 0fffbf50 data %08x\n", data);
         device->ram[(addr+0) & 0x7ffffff] = (data >> 0) & 0xff;
         device->ram[(addr+1) & 0x7ffffff] = (data >> 8) & 0xff;
         device->ram[(addr+2) & 0x7ffffff] = (data >> 16) & 0xff;
         device->ram[(addr+3) & 0x7ffffff] = (data >> 24) & 0xff;
+        if(addr >= 0x000447a0 && addr <= 0x00044b88)
+        {
+            printf("bufferPrint write %08x data %08x\n", addr, data);
+            if(device->cpu->r[15] == 0x0001423e)
+            {
+                char c1 = device->bootrom[addr];
+                char c2 = device->bootrom[addr + 1];
+                char c3 = device->bootrom[addr + 2];
+                char c4 = device->bootrom[addr + 3];
+                fputc(c1, device->serial_buffer_log);
+                fputc(c2, device->serial_buffer_log);
+                fputc(c3, device->serial_buffer_log);
+                fputc(c4, device->serial_buffer_log);
+                fflush(device->serial_buffer_log);
+            }
+        }
+    }
+    else if(addr >= 0x18000000 && addr < 0x18048000)
+    {
+        device->iboot[(addr+0) - 0x18000000] = (data >> 0) & 0xff;
+        device->iboot[(addr+1) - 0x18000000] = (data >> 8) & 0xff;
+        device->iboot[(addr+2) - 0x18000000] = (data >> 16) & 0xff;
+        device->iboot[(addr+3) - 0x18000000] = (data >> 24) & 0xff;
     }
     else if(addr >= 0x22000000 && addr < 0x22400000)
     {

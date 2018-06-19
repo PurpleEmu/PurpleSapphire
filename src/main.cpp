@@ -60,8 +60,6 @@ int main(int ac, char** av)
         cpu.rw_real = iphone2g_rw;
         cpu.ww_real = iphone2g_ww;
 
-        u8* iboot_img3 = nullptr;
-
         FILE* fp = fopen(av[2],"rb");
         if(!fp)
         {
@@ -88,19 +86,22 @@ int main(int ac, char** av)
         }
         fclose(fp);
 
-        fp = fopen(av[4],"rb");
-        if(!fp)
-        {
-            printf("unable to open %s, are you sure it exists?\n", av[3]);
-            return 3;
-        }
-
         if(bootromhle)
         {
+            fp = fopen(av[4],"rb");
+            if(!fp)
+            {
+                printf("unable to open %s, are you sure it exists?\n", av[3]);
+                return 3;
+            }
             fseek(fp, 0, SEEK_END);
             s64 filesize = ftell(fp);
             fseek(fp, 0, SEEK_SET);
-            if(filesize == -1) return 5;
+            if(filesize == -1)
+            {
+                fclose(fp);
+                return 5;
+            }
             if(fread(dev->iboot, 1, filesize, fp) != filesize)
             {
                 fclose(fp);
@@ -121,7 +122,7 @@ int main(int ac, char** av)
         }
         else
         {
-            for(int i = 0; i < 300000; i++)
+            for(int i = 0; i < 500000; i++)
             {
                 cpu.run(1);
                 dev->tick();

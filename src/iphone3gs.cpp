@@ -1,5 +1,7 @@
 #include "iphone3gs.h"
 
+#define printf(...) do{ if(do_print) printf(__VA_ARGS__); } while(0)
+
 void iphone3gs::init()
 {
     //TODO
@@ -19,6 +21,9 @@ void iphone3gs::interrupt(int num)
 {
     //TODO
 }
+
+#undef printf
+#define printf(...) do{ if(device->do_print) printf(__VA_ARGS__); } while(0)
 
 u32 iphone3gs_rw(void* dev, u32 addr)
 {

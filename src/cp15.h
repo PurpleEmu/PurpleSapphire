@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.h"
+#include "arm.h"
 
 enum class arm_type
 {
@@ -25,6 +26,10 @@ enum cp15_coprocessor_access_permissions
 
 struct cp15_t
 {
+    bool do_print;
+
+    void* cpu;
+
     union
     {
         struct
@@ -46,7 +51,7 @@ struct cp15_t
             u32 low_intr_latency_enable : 1;
             u32 unaligned_access_enable : 1;
             u32 subpage_ap_enable : 1;
-            u32 intr_vector_scramble_enable : 1;
+            u32 intr_vectored_mode_enable : 1;
             u32 endian_on_exception : 1;
             u32 l2_cache_enable : 1;
             u32 reserved3 : 5;

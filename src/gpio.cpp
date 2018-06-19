@@ -4,6 +4,15 @@
 void gpio_t::init()
 {
     //TODO
+    for(int i = 0; i < 7; i++)
+    {
+        int_level[i] = 0;
+        int_stat[i] = 0;
+        int_enable[i] = 0;
+    }
+    int_type = 0;
+    state[0].state = 0;
+    fsel = 0;
 }
 
 u32 gpio_t::rw(u32 addr)

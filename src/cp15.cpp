@@ -1,4 +1,6 @@
-#include "cp15.h"
+#include "arm.h"
+
+#define printf(...) do{ if(do_print) printf(__VA_ARGS__); } while(0)
 
 void cp15_t::init()
 {
@@ -10,6 +12,8 @@ void cp15_t::init()
     coprocessor_access_control.whole = 0x00000000;
     l2_cache_aux_control.whole = 0x00000042;
     peripheral_port_remap.whole = 0x00000000;
+
+    do_print = true;
 }
 
 u32 cp15_t::decode_peripheral_port_size()
@@ -17,26 +21,26 @@ u32 cp15_t::decode_peripheral_port_size()
     switch(peripheral_port_remap.size)
     {
         case 0x00: return 0x00000000; break;
-        case 0x03: return 0x00001000; break;
-        case 0x04: return 0x00002000; break;
-        case 0x05: return 0x00004000; break;
-        case 0x06: return 0x00008000; break;
-        case 0x07: return 0x00010000; break;
-        case 0x08: return 0x00020000; break;
-        case 0x09: return 0x00040000; break;
-        case 0x0a: return 0x00080000; break;
-        case 0x0b: return 0x00100000; break;
-        case 0x0c: return 0x00200000; break;
-        case 0x0d: return 0x00400000; break;
-        case 0x0e: return 0x00800000; break;
-        case 0x0f: return 0x01000000; break;
-        case 0x10: return 0x02000000; break;
-        case 0x11: return 0x04000000; break;
-        case 0x12: return 0x08000000; break;
-        case 0x13: return 0x10000000; break;
-        case 0x14: return 0x20000000; break;
-        case 0x15: return 0x40000000; break;
-        case 0x16: return 0x80000000; break;
+        case 0x02: return 0x00001000; break;
+        case 0x03: return 0x00002000; break;
+        case 0x04: return 0x00004000; break;
+        case 0x05: return 0x00008000; break;
+        case 0x06: return 0x00010000; break;
+        case 0x07: return 0x00020000; break;
+        case 0x08: return 0x00040000; break;
+        case 0x09: return 0x00080000; break;
+        case 0x0a: return 0x00100000; break;
+        case 0x0b: return 0x00200000; break;
+        case 0x0c: return 0x00400000; break;
+        case 0x0d: return 0x00800000; break;
+        case 0x0e: return 0x01000000; break;
+        case 0x0f: return 0x02000000; break;
+        case 0x10: return 0x04000000; break;
+        case 0x11: return 0x08000000; break;
+        case 0x12: return 0x10000000; break;
+        case 0x13: return 0x20000000; break;
+        case 0x14: return 0x40000000; break;
+        case 0x15: return 0x80000000; break;
     }
     return 0;
 }

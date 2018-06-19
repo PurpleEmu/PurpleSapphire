@@ -12,6 +12,7 @@ struct wdt_t
     u32 cnt_period;
 
     void init();
+    void init_hle();
 
     void tick();
 

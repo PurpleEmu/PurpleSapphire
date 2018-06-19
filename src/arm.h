@@ -17,7 +17,10 @@ enum arm_mode
 
 struct arm_cpu
 {
+    u32 r[16];
+
     bool hle;
+    bool do_print;
 
     union
     {
@@ -42,8 +45,6 @@ struct arm_cpu
         };
         u32 whole;
     } cpsr, spsr_fiq, spsr_irq, spsr_svc, spsr_abt, spsr_und, spsr_mon;
-
-    u32 r[16];
 
     union
     {
@@ -189,7 +190,7 @@ struct arm_cpu
     std::function<void(void*,u32,u32)> ww_real;
 
     void init();
-    void init_hle();
+    void init_hle(bool print);
 
     u32 rw(u32 addr);
     void ww(u32 addr, u32 data);

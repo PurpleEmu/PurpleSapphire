@@ -10,6 +10,11 @@ void wdt_t::init()
     cnt = cnt_period;
 }
 
+void wdt_t::init_hle()
+{
+    ctrl = 0xfcaa5;
+}
+
 void wdt_t::tick()
 {
     iphone2g* dev = (iphone2g*) device;

@@ -1,6 +1,8 @@
 #include "arm.h"
+#include "iphone2g.h"
+#include "iphone3gs.h"
 
-#define printf(...) do{ if(!((r[15] >= 0x18000000) && (r[15] < 0x18048000)) && hle) printf(__VA_ARGS__); } while(0)
+#define printf(...) do{ if(do_print) printf(__VA_ARGS__); } while(0)
 
 void arm_cpu::init()
 {
@@ -47,11 +49,21 @@ void arm_cpu::init()
     cp15.type = type;
 
     cp15.init();
+
+    cp15.cpu = this;
+
+    do_print = true;
+    cp15.do_print = true;
 }
 
-void arm_cpu::init_hle()
+void arm_cpu::init_hle(bool print)
 {
     hle = true;
+    if(!print)
+    {
+        do_print = false;
+        cp15.do_print = false;
+    }
 }
 
 u32 arm_cpu::rw(u32 addr)
@@ -354,6 +366,24 @@ enum class arm_cond : u8
 void arm_cpu::tick()
 {
     //TODO
+    //makes logs shorter when doing hle
+    if(hle && (r[15] == 0x00012f5e))
+    {
+        iphone2g* dev2g = nullptr;
+        iphone3gs* dev3gs = nullptr;
+        if(type == arm_type::arm11)
+        {
+            dev2g = (iphone2g*)device;
+        }
+        else if(type == arm_type::cortex_a8)
+        {
+            dev3gs = (iphone3gs*)device;
+        }
+        do_print = true;
+        cp15.do_print = true;
+        if(type == arm_type::arm11) dev2g->do_print = true;
+        else if(type == arm_type::cortex_a8) dev3gs->do_print = true;
+    }
     if(data_abort && !cpsr.abort_disable && abort_enable)
     {
         arm_mode old_mode = cpsr.mode;
@@ -1516,7 +1546,7 @@ void arm_cpu::tick()
 
                             if(s && (rd != 15))
                             {
-                                cpsr.carry = r[rn] < shift_operand;
+                                cpsr.carry = result64 < 0x100000000LL;
                                 cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                 cpsr.sign = result & 0x80000000;
                                 cpsr.zero = !result;
@@ -1559,7 +1589,7 @@ void arm_cpu::tick()
 
                             if(s && (rd != 15))
                             {
-                                cpsr.carry = r[rn] > shift_operand;
+                                cpsr.carry = result64 < 0x100000000LL;
                                 cpsr.overflow = ((shift_operand ^ r[rn]) & (shift_operand ^ result) & 0x80000000);
                                 cpsr.sign = result & 0x80000000;
                                 cpsr.zero = !result;
@@ -1690,7 +1720,7 @@ void arm_cpu::tick()
 
                             if(s && (rd != 15))
                             {
-                                cpsr.carry = r[rn] < shift_operand;
+                                cpsr.carry = result64 < 0x100000000LL;
                                 cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                                 cpsr.sign = result & 0x80000000;
                                 cpsr.zero = !result;
@@ -1733,7 +1763,7 @@ void arm_cpu::tick()
 
                             if(s && (rd != 15))
                             {
-                                cpsr.carry = r[rn] > shift_operand;
+                                cpsr.carry = result64 < 0x100000000LL;
                                 cpsr.overflow = ((shift_operand ^ r[rn]) & (shift_operand ^ result) & 0x80000000);
                                 cpsr.sign = result & 0x80000000;
                                 cpsr.zero = !result;
@@ -1795,7 +1825,7 @@ void arm_cpu::tick()
                             u64 result64 = (u64)r[rn] - shift_operand;
                             u32 result = (u32)result64;
 
-                            cpsr.carry = r[rn] < shift_operand;
+                            cpsr.carry = result64 < 0x100000000LL;
                             cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
                             cpsr.sign = result & 0x80000000;
                             cpsr.zero = !result;
@@ -2095,7 +2125,6 @@ void arm_cpu::tick()
                         {
                             u32 data = rw(addr);
                             r[15] = data & 0xfffffffe;
-                            r[15] -= 4;
                             cpsr.thumb = data & 1;
                             if(s)
                             {
@@ -2962,9 +2991,9 @@ void arm_cpu::tick()
                 else opcode_2 &= 0xffff;
                 printf("Opcode:%04x\nOpcode 2:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, opcode_2, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
             }
-            else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
+            else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR3:%08x\nR4:%08x\nR6:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[3], r[4], r[6], r[12], cpsr.whole);
         }
-        else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
+        else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR3:%08x\nR4:%08x\nR6:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[3], r[4], r[6], r[12], cpsr.whole);
 
         switch((opcode >> 13) & 7)
         {
@@ -3102,7 +3131,7 @@ void arm_cpu::tick()
                 u32 result = (u32)result64;
                 cpsr.sign = result & (1 << 31);
                 cpsr.zero = result == 0;
-                cpsr.carry = r[rn] < imm;
+                cpsr.carry = result64 < 0x100000000LL;
                 cpsr.overflow = (~(r[rn] ^ imm) & (r[rn] ^ result) & 0x80000000);
                 break;
             }
@@ -3124,6 +3153,16 @@ void arm_cpu::tick()
             case 3:
             {
                 printf("Thumb SUB_2\n");
+                int rd = (opcode >> 8) & 7;
+                u32 imm = opcode & 0xff;
+                u64 result64 = r[rd] - imm;
+                u32 oldrd = r[rd];
+                r[rd] = (u32)result64;
+
+                cpsr.sign = r[rd] & 0x80000000;
+                cpsr.zero = r[rd] == 0;
+                cpsr.carry = result64 < 0x100000000ULL;
+                cpsr.overflow = (~(oldrd ^ imm) & (oldrd ^ r[rd]) & 0x80000000);
                 break;
             }
             }
@@ -3148,6 +3187,16 @@ void arm_cpu::tick()
                 case 2:
                 {
                     printf("Thumb STRB_2\n");
+                    int rd = opcode & 7;
+                    int rn = (opcode >> 3) & 7;
+                    int rm = (opcode >> 6) & 7;
+                    
+                    u32 addr = r[rn] + r[rm];
+
+                    u32 data = rw(addr);
+                    data &= ~(0xff << ((addr & 3) << 3));
+                    data |= (r[rd] & 0xff) << ((addr & 3) << 3);
+                    ww(addr, data);
                     break;
                 }
                 case 3:
@@ -3161,6 +3210,7 @@ void arm_cpu::tick()
                     int rd = opcode & 7;
                     int rn = (opcode >> 3) & 7;
                     int rm = (opcode >> 6) & 7;
+
                     u32 addr = r[rn] + r[rm];
                     u32 data = rw(addr & 0xfffffffc);
                     r[rd] = (data >> ((addr & 3) << 3)) | (data << (32 - ((addr & 3) << 3)));
@@ -3174,6 +3224,14 @@ void arm_cpu::tick()
                 case 6:
                 {
                     printf("Thumb LDRB_2\n");
+                    int rm = (opcode >> 6) & 7;
+                    int rn = (opcode >> 3) & 7;
+                    int rd = opcode & 7;
+                    u32 addr = r[rm] + r[rn];
+                    u32 data = rw(addr);
+                    data >>= ((addr & 3) << 3);
+                    data &= 0xff;
+                    r[rd] = data;
                     break;
                 }
                 case 7:
@@ -3231,8 +3289,9 @@ void arm_cpu::tick()
                             int h1 = (opcode >> 7) & 1;
                             int h2 = (opcode >> 6) & 1;
                             int rd = (opcode & 7) | (h1 << 3);
-                            int rm = ((opcode >> 3) & 7) | (h1 << 3);
+                            int rm = ((opcode >> 3) & 7) | (h2 << 3);
                             r[rd] = r[rm];
+                            if(rd == 15) r[15] -= 2;
                             break;
                         }
                         case 3:
@@ -3242,8 +3301,8 @@ void arm_cpu::tick()
                                 printf("Thumb BLX_2\n");
                                 int rm = (opcode >> 3) & 7;
 
-                                r[14] = (r[15] - 2) | 1;
-                                r[15] = r[rm] & 0xfffffffe;
+                                r[14] = (r[15] + 2) | 1;
+                                r[15] = (r[rm] - 2) & 0xfffffffe;
                                 cpsr.thumb = r[rm] & 1;
                             }
                             else
@@ -3399,7 +3458,7 @@ void arm_cpu::tick()
                             u32 result = (u32)result64;
                             cpsr.sign = result & (1 << 31);
                             cpsr.zero = result == 0;
-                            cpsr.carry = r[rn] < r[rm];
+                            cpsr.carry = result64 < 0x100000000LL;
                             cpsr.overflow = (~(r[rn] ^ r[rm]) & (r[rn] ^ result) & 0x80000000);
                             break;
                         }
@@ -3452,7 +3511,18 @@ void arm_cpu::tick()
         {
             if((opcode >> 11) & 1)
             {
-                if((opcode >> 12) & 1) printf("Thumb LDRB\n");
+                if((opcode >> 12) & 1)
+                {
+                    printf("Thumb LDRB\n");
+                    int rd = opcode & 7;
+                    int rn = (opcode >> 3) & 7;
+                    u32 imm = (opcode >> 6) & 0x1f;
+                    u32 addr = r[rn] + imm;
+                    u32 data = rw(addr);
+                    data >>= ((addr & 3) << 3);
+                    data &= 0xff;
+                    r[rd] = data;
+                }
                 else
                 {
                     printf("Thumb LDR\n");
@@ -3467,7 +3537,19 @@ void arm_cpu::tick()
             }
             else
             {
-                if((opcode >> 12) & 1) printf("Thumb STRB\n");
+                if((opcode >> 12) & 1)
+                {
+                    printf("Thumb STRB\n");
+                    int rd = opcode & 7;
+                    int rn = (opcode >> 3) & 7;
+                    u32 imm = (opcode >> 6) & 0x1f;
+
+                    u32 addr = r[rn] + (imm << 2);
+                    u32 data = rw(addr);
+                    data &= ~(0xff << ((addr & 3) << 3));
+                    data |= (r[rd] & 0xff) << ((addr & 3) << 3);
+                    ww(addr, data);
+                }
                 else
                 {
                     printf("Thumb STR\n");
@@ -3579,7 +3661,7 @@ void arm_cpu::tick()
                         if((opcode >> 8) & 1)
                         {
                             u32 data = rw(r[13]);
-                            r[15] = data & 0xfffffffe;
+                            r[15] = (data - 2) & 0xfffffffe;
                             cpsr.thumb = data & 1;
                             r[13] += 4;
                         }
@@ -3657,9 +3739,9 @@ void arm_cpu::tick()
                 if((opcode >> 11) & 1)
                 {
                     printf("Thumb ADD_6\n");
-                    u32 imm = (opcode & 0xff) << 2;
+                    u32 imm = opcode & 0xff;
                     int rd = (opcode >> 8) & 7;
-                    r[rd] = r[13] + imm;
+                    r[rd] = r[13] + (imm << 2);
                 }
                 else
                 {
@@ -3682,7 +3764,13 @@ void arm_cpu::tick()
                     printf("Thumb B\n");
                     s8 imm = opcode & 0xff;
                     int cond = (opcode >> 8) & 0xf;
-                    bool cond_met;
+                    bool cond_met = false;
+                    if(cond == 0xf)
+                    {
+                        printf("Thumb SWI\n");
+                    }
+                    else
+                    {
                     switch(cond)
                     {
                     case 0x0:
@@ -3730,11 +3818,9 @@ void arm_cpu::tick()
                     case 0xe:
                         cond_met = true;
                         break;
-                    case 0xf:
-                        cond_met = false;
-                        break;
                     }
-                    if(cond_met) r[15] = (u32)((r[15] + 2) + ((s16)imm << 1));
+                    if(cond_met) r[15] = (u32)((r[15] + 2) + ((s32)(s8)imm << 1));
+                    }
                 }
             }
             else
