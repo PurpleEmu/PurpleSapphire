@@ -26,6 +26,8 @@ src/iphone2g.h
 src/iphone3gs.cpp
 src/iphone3gs.h
 src/main.cpp
+src/power.cpp
+src/power.h
 src/spi.cpp
 src/spi.h
 src/timer.cpp

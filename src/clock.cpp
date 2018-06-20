@@ -9,7 +9,7 @@ u32 clock0_t::rw(u32 addr)
 {
     switch(addr & 0xfff)
     {
-        case 0x000: return config;
+        case 0x000: return config.whole;
         case 0x008: return adj1;
         case 0x404: return adj2;
     }
@@ -20,7 +20,7 @@ void clock0_t::ww(u32 addr, u32 data)
 {
     switch(addr & 0xfff)
     {
-        case 0x000: config = data; break;
+        case 0x000: config.whole = data; break;
         case 0x008: adj1 = data; break;
         case 0x404: adj2 = data; break;
     }

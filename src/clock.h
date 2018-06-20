@@ -4,7 +4,15 @@
 
 struct clock0_t
 {
-    u32 config;
+    union
+    {
+        struct
+        {
+            u32 base_divisor : 3;
+            u32 unknown1 : 29;
+        };
+        u32 whole;
+    } config;
     u32 adj1, adj2;
 
     void init();
@@ -15,7 +23,8 @@ struct clock0_t
 
 struct clock1_t
 {
-    u32 config0, config1, config2;
+    u32 config0;
+    u32 config1, config2;
 
     struct pll
     {

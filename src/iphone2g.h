@@ -4,6 +4,7 @@
 #include "arm.h"
 #include "clock.h"
 #include "gpio.h"
+#include "power.h"
 #include "spi.h"
 #include "timer.h"
 #include "usb_phy.h"
@@ -33,6 +34,7 @@ struct iphone2g
     gpio_t gpio;
     spi_t spi[3];
     usb_phy_t usb_phy;
+    power_t power;
 
     void init();
     void init_hle();

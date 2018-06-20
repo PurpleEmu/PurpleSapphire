@@ -227,6 +227,20 @@ u32 iphone2g_rw(void* dev, u32 addr)
             printf("Vic0 read %08x\n", addr);
             return device->vics[0].rw(addr & 0xfff);
         }
+        else if(periph_addr >= 0x00e02000 && periph_addr < 0x00e03000)
+        {
+            printf("EdgeIC read %08x\n", addr);
+        }
+        else if(periph_addr >= 0x01a00000 && periph_addr < 0x01a0080)
+        {
+            printf("GPIOIC read %08x\n", addr);
+            return device->gpio.gpioic.rw(addr & 0xfff);
+        }
+        else if(periph_addr >= 0x01a00080 && periph_addr < 0x01a00100)
+        {
+            printf("GPIOIC read %08x\n", addr);
+            return device->gpio.gpioic.rw(addr & 0xfff);
+        }
         else if(periph_addr >= 0x00e01000 && periph_addr < 0x00e02000)
         {
             printf("Vic1 read %08x\n", addr);
@@ -350,6 +364,20 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
         {
             printf("Vic1 write %08x data %08x\n", addr, data);
             device->vics[1].ww(addr & 0xfff, data);
+        }
+        else if(periph_addr >= 0x00e02000 && periph_addr < 0x00e03000)
+        {
+            printf("EdgeIC write %08x data %08x\n", addr, data);
+        }
+        else if(periph_addr >= 0x01a00000 && periph_addr < 0x01a00080)
+        {
+            printf("POWER write %08x data %08x\n", addr, data);
+            device->power.ww(addr & 0x7f, data);
+        }
+        else if(periph_addr >= 0x01a00080 && periph_addr < 0x01a00100)
+        {
+            printf("GPIOIC write %08x data %08x\n", addr, data);
+            device->gpio.gpioic.ww(addr & 0x7f, data);
         }
         else if(periph_addr >= 0x04300000 && periph_addr < 0x04300100)
         {

@@ -1389,7 +1389,7 @@ void arm_cpu::tick()
                                             if(rm != 15)
                                             {
                                                 r[15] = (r[rm] & 0xfffffffe);
-                                                r[15] -= 4;
+                                                //r[15] -= 4;
                                             }
                                             cpsr.thumb = r[rm] & 1;
                                         }

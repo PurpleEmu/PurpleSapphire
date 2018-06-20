@@ -9,6 +9,7 @@ gpio.o \
 iphone2g.o \
 iphone3gs.o \
 main.o \
+power.o \
 spi.o \
 timer.o \
 usb_phy.o \
