@@ -44,8 +44,6 @@ struct gpio_t
         u32 whole;
     } fsel;
 
-    bool pin_output[32];
-
     void* device;
     gpioic_t gpioic;
 

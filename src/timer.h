@@ -18,6 +18,7 @@ struct timer
     void init();
 
     void tick();
+    void update();
 
     u32 rw(u32 addr);
     void ww(u32 addr, u32 data);

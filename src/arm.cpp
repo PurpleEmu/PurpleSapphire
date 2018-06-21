@@ -17,6 +17,7 @@ void arm_cpu::init()
     irq = false;
     data_abort = false;
     undefined = false;
+    reset = true;
     fiq_enable = true;
     irq_enable = true;
     abort_enable = true;
@@ -46,14 +47,16 @@ void arm_cpu::init()
     fpinst = 0xee000a00;
     fpinst2 = 0;
 
-    cp15.type = type;
-
-    cp15.init();
-
     cp15.cpu = this;
+    cp15.type = type;
+    cp15.init();
 
     do_print = true;
     cp15.do_print = true;
+
+    just_branched = false;
+
+    opcode = 0;
 }
 
 void arm_cpu::init_hle(bool print)
@@ -76,14 +79,13 @@ void arm_cpu::ww(u32 addr, u32 data)
     ww_real(device, addr, data);
 }
 
-u32 arm_cpu::get_load_store_addr(u32 opcode)
+u32 arm_cpu::get_load_store_addr()
 {
     int rn = (opcode >> 16) & 0xf;
     bool w = (opcode >> 21) & 1;
     bool u = (opcode >> 23) & 1;
     bool p = (opcode >> 24) & 1;
     bool i = (opcode >> 25) & 1;
-    u32 rrn = (rn == 15) ? r[15] + 8 : r[rn];
 
     arm_mode old_mode = cpsr.mode;
     if(!p && w) cpsr.mode = mode_user;
@@ -124,21 +126,21 @@ u32 arm_cpu::get_load_store_addr(u32 opcode)
     {
         if(w)
         {
-            if(u) r[rn] = rrn + offset;
-            else r[rn] = rrn - offset;
+            if(u) r[rn] = r[rn] + offset;
+            else r[rn] = r[rn] - offset;
 
             addr = r[rn];
         }
-        else addr = u ? (rrn + offset) : (rrn - offset);
+        else addr = u ? (r[rn] + offset) : (r[rn] - offset);
     }
     else
     {
         if(!w)
         {
-            addr = rrn;
+            addr = r[rn];
 
-            if(u) r[rn] = rrn + offset;
-            else r[rn] = rrn - offset;
+            if(u) r[rn] = r[rn] + offset;
+            else r[rn] = r[rn] - offset;
         }
     }
 
@@ -146,7 +148,7 @@ u32 arm_cpu::get_load_store_addr(u32 opcode)
     return addr;
 }
 
-u32 arm_cpu::get_load_store_multi_addr(u32 opcode)
+u32 arm_cpu::get_load_store_multi_addr()
 {
     u16 reg_list = opcode & 0xffff;
     int rn = (opcode >> 16) & 0xf;
@@ -173,12 +175,11 @@ u32 arm_cpu::get_load_store_multi_addr(u32 opcode)
     return addr;
 }
 
-u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
+u32 arm_cpu::get_shift_operand(bool s)
 {
     bool i = (opcode >> 25) & 1;
     u32 shift_operand = opcode & 0xfff;
     int rm = shift_operand & 0xf;
-    u32 rrm = (rm == 15) ? r[15] + 8 : r[rm];
 
     if(i)
     {
@@ -186,13 +187,13 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
         u8 imm = shift_operand & 0xff;
         u8 rotate_imm = ((shift_operand >> 8) & 0xf) << 1;
         u32 operand = (imm >> rotate_imm) | (imm << (32 - rotate_imm));
-        if(rotate_imm != 0) cpsr.carry = (operand >> 31) & 1;
+        if(s && (rotate_imm != 0)) cpsr.carry = (operand >> 31) & 1;
         return operand;
     }
     else if(!((shift_operand >> 4) & 0xff))
     {
         //Register
-        u32 operand = rrm;
+        u32 operand = r[rm];
         return operand;
     }
     else
@@ -204,11 +205,11 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
             //LSLImm
             int shift_imm = (shift_operand >> 7) & 0x1f;
             u32 operand;
-            if(shift_imm == 0) operand = rrm;
+            if(shift_imm == 0) operand = r[rm];
             else
             {
-                operand = rrm << shift_imm;
-                cpsr.carry = rrm & (1 << (32 - shift_imm));
+                operand = r[rm] << shift_imm;
+                if(s) cpsr.carry = (r[rm] & (1 << (32 - shift_imm))) ? 1 : 0;
             }
             return operand;
         }
@@ -216,23 +217,22 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
         {
             //LSLReg
             int rs = (shift_operand >> 8) & 0xf;
-            rrm += 4;
             u32 operand = 0;
-            if((r[rs] & 0xff) == 0) operand = rrm;
+            if((r[rs] & 0xff) == 0) operand = r[rm];
             else if((r[rs] & 0xff) < 32)
             {
-                operand = rrm << (r[rs] & 0xff);
-                cpsr.carry = rrm & (1 << (32 - (r[rs] & 0xff)));
+                operand = r[rm] << (r[rs] & 0xff);
+                if(s) cpsr.carry = r[rm] & (1 << (32 - (r[rs] & 0xff))) ? 1 : 0;
             }
             else if((r[rs] & 0xff) == 32)
             {
                 operand = 0;
-                cpsr.carry = rrm & 1;
+                if(s) cpsr.carry = r[rm] & 1;
             }
             else
             {
                 operand = 0;
-                cpsr.carry = false;
+                if(s) cpsr.carry = false;
             }
             return operand;
         }
@@ -244,12 +244,12 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
             if(shift_imm == 0)
             {
                 operand = 0;
-                cpsr.carry = ((rrm >> 31) & 1);
+                if(s) cpsr.carry = ((r[rm] >> 31) & 1);
             }
             else
             {
-                operand = rrm >> shift_imm;
-                cpsr.carry = rrm & (1 << (shift_imm - 1));
+                operand = r[rm] >> shift_imm;
+                if(s) cpsr.carry = r[rm] & (1 << (shift_imm - 1)) ? 1 : 0;
             }
             return operand;
         }
@@ -257,23 +257,23 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
         {
             //LSRReg
             int rs = (shift_operand >> 8) & 0xf;
-            rrm += 4;
+            r[rm] += 4;
             u32 operand = 0;
-            if((r[rs] & 0xff) == 0) operand = rrm;
+            if((r[rs] & 0xff) == 0) operand = r[rm];
             else if((r[rs] & 0xff) < 32)
             {
-                operand = rrm >> (r[rs] & 0xff);
-                cpsr.carry = rrm & (1 << ((r[rs] & 0xff) - 1));
+                operand = r[rm] >> (r[rs] & 0xff);
+                if(s) cpsr.carry = r[rm] & (1 << ((r[rs] & 0xff) - 1)) ? 1 : 0;
             }
             else if((r[rs] & 0xff) == 32)
             {
                 operand = 0;
-                cpsr.carry = (rrm >> 31) & 1;
+                if(s) cpsr.carry = (r[rm] >> 31) & 1;
             }
             else
             {
                 operand = 0;
-                cpsr.carry = false;
+                if(s) cpsr.carry = false;
             }
             return operand;
         }
@@ -284,14 +284,14 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
             u32 operand;
             if(shift_imm == 0)
             {
-                if(((rrm >> 31) & 1) == 0) operand = 0;
+                if(((r[rm] >> 31) & 1) == 0) operand = 0;
                 else operand = 0xffffffff;
-                cpsr.carry = ((rrm >> 31) & 1);
+                if(s) cpsr.carry = ((r[rm] >> 31) & 1);
             }
             else
             {
-                operand = (s32)rrm >> shift_imm;
-                cpsr.carry = rrm & (1 << (shift_imm - 1));
+                operand = (s32)r[rm] >> shift_imm;
+                if(s) cpsr.carry = r[rm] & (1 << (shift_imm - 1)) ? 1 : 0;
             }
             return operand;
         }
@@ -299,19 +299,19 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
         {
             //ASRReg
             int rs = (shift_operand >> 8) & 0xf;
-            rrm += 4;
+            r[rm] += 4;
             u32 operand = 0;
-            if((r[rs] & 0xff) == 0) operand = rrm;
+            if((r[rs] & 0xff) == 0) operand = r[rm];
             else if((r[rs] & 0xff) < 32)
             {
-                operand = (s32)rrm >> (r[rs] & 0xff);
-                cpsr.carry = rrm & (1 << ((r[rs] & 0xff) - 1));
+                operand = (s32)r[rm] >> (r[rs] & 0xff);
+                if(s) cpsr.carry = r[rm] & (1 << ((r[rs] & 0xff) - 1)) ? 1 : 0;
             }
             else
             {
-                if(((rrm >> 31) & 1) == 0) operand = 0;
+                if(((r[rm] >> 31) & 1) == 0) operand = 0;
                 else operand = 0xffffffff;
-                cpsr.carry = (rrm >> 31) & 1;
+                if(s) cpsr.carry = (r[rm] >> 31) & 1;
             }
             return operand;
         }
@@ -322,13 +322,13 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
             u32 operand;
             if(shift_imm == 0)
             {
-                operand = ((u32)cpsr.carry << 31) | (rrm >> 1);
-                cpsr.carry = rrm & 1;
+                operand = ((u32)cpsr.carry << 31) | (r[rm] >> 1);
+                if(s) cpsr.carry = r[rm] & 1;
             }
             else
             {
-                operand = (rrm >> shift_imm) | (rrm << (32 - shift_imm));
-                cpsr.carry = rrm & (1 << (shift_imm - 1));
+                operand = (r[rm] >> shift_imm) | (r[rm] << (32 - shift_imm));
+                if(s) cpsr.carry = r[rm] & (1 << (shift_imm - 1)) ? 1 : 0;
             }
             return operand;
         }
@@ -336,21 +336,281 @@ u32 arm_cpu::get_shift_operand(u32 opcode, bool s)
         {
             //RORReg
             int rs = (shift_operand >> 8) & 0xf;
-            rrm += 4;
+            r[rm] += 4;
             u32 operand = 0;
-            if((r[rs] & 0xff) == 0) operand = rrm;
+            if((r[rs] & 0xff) == 0) operand = r[rm];
             else if((r[rs] & 0x1f) == 0)
             {
-                operand = rrm;
-                cpsr.carry = (rrm >> 31) & 1;
+                operand = r[rm];
+                if(s) cpsr.carry = (r[rm] >> 31) & 1;
             }
             else
             {
-                operand = (rrm >> (r[rs] & 0x1f)) | (rrm << (32 - (r[rs] & 0x1f)));
-                cpsr.carry = rrm & (1 << ((r[rs] & 0x1f) - 1));
+                operand = (r[rm] >> (r[rs] & 0x1f)) | (r[rm] << (32 - (r[rs] & 0x1f)));
+                if(s) cpsr.carry = r[rm] & (1 << ((r[rs] & 0x1f) - 1)) ? 1 : 0;
             }
             return operand;
         }
+        }
+    }
+}
+
+void arm_cpu::tick_media(u32 opcode)
+{
+    switch((opcode >> 23) & 3)
+    {
+        case 0:
+        {
+            switch((opcode >> 20) & 7)
+            {
+                case 1:
+                {
+                    switch((opcode >> 5) & 7)
+                    {
+                        case 0: printf("SADD16\n");
+                        case 1: printf("SADDSUBX\n");
+                        case 2: printf("SSUBADDX\n");
+                        case 3: printf("SSUB16\n");
+                        case 4: printf("SADD8\n");
+                        case 7: printf("SSUB8\n");
+                    }
+                    break;
+                }
+                case 2:
+                {
+                    switch((opcode >> 5) & 7)
+                    {
+                        case 0: printf("QADD16\n");
+                        case 1: printf("QADDSUBX\n");
+                        case 2: printf("QSUBADDX\n");
+                        case 3: printf("QSUB16\n");
+                        case 4: printf("QADD8\n");
+                        case 7: printf("QSUB8\n");
+                    }
+                    break;
+                }
+                case 3:
+                {
+                    switch((opcode >> 5) & 7)
+                    {
+                        case 0: printf("SHADD16\n");
+                        case 1: printf("SHADDSUBX\n");
+                        case 2: printf("SHSUBADDX\n");
+                        case 3: printf("SHSUB16\n");
+                        case 4: printf("SHADD8\n");
+                        case 7: printf("SHSUB8\n");
+                    }
+                    break;
+                }
+                case 5:
+                {
+                    switch((opcode >> 5) & 7)
+                    {
+                        case 0: printf("UADD16\n");
+                        case 1: printf("UADDSUBX\n");
+                        case 2: printf("USUBADDX\n");
+                        case 3: printf("USUB16\n");
+                        case 4: printf("UADD8\n");
+                        case 7: printf("USUB8\n");
+                    }
+                    break;
+                }
+                case 6:
+                {
+                    switch((opcode >> 5) & 7)
+                    {
+                        case 0: printf("UQADD16\n");
+                        case 1: printf("UQADDSUBX\n");
+                        case 2: printf("UQSUBADDX\n");
+                        case 3: printf("UQSUB16\n");
+                        case 4: printf("UQADD8\n");
+                        case 7: printf("UQSUB8\n");
+                    }
+                    break;
+                }
+                case 7:
+                {
+                    switch((opcode >> 5) & 7)
+                    {
+                        case 0: printf("UHADD16\n");
+                        case 1: printf("UHADDSUBX\n");
+                        case 2: printf("UHSUBADDX\n");
+                        case 3: printf("UHSUB16\n");
+                        case 4: printf("UHADD8\n");
+                        case 7: printf("UHSUB8\n");
+                    }
+                    break;
+                }
+            }
+            break;
+        }
+        case 1:
+        {
+            if((opcode >> 5) & 1)
+            {
+                switch((opcode >> 6) & 3)
+                {
+                    case 0:
+                    {
+                        switch((opcode >> 20) & 3)
+                        {
+                            case 2:
+                            {
+                                if((opcode >> 2) & 1) printf("USAT16\n");
+                                else printf("SSAT16\n");
+                                break;
+                            }
+                            case 3: printf("REV\n"); break;
+                        }
+                        break;
+                    }
+                    case 1:
+                    {
+                        bool r15 = ((opcode >> 16) & 0xf) == 0xf;
+
+                        switch((opcode >> 20) & 7)
+                        {
+                            case 0:
+                            {
+                                if(r15)
+                                {
+                                    printf("SXTB16\n");
+                                    int rm = opcode & 0xf;
+                                    int rotate = ((opcode >> 10) & 3) << 3;
+                                    int rd = (opcode >> 12) & 0xf;
+
+                                    u32 operand = (r[rm] >> rotate) | (r[rm] << (32 - rotate));
+                                    r[rd] = (u16)(s16)(operand & 0xffff);
+                                    r[rd] |= (u32)(((s16)operand >> 16) << 16);
+                                }
+                                else printf("SXTAB16\n");
+                                break;
+                            }
+                            case 2:
+                            {
+                                if(r15)
+                                {
+                                    printf("SXTB\n");
+                                    int rm = opcode & 0xf;
+                                    int rotate = ((opcode >> 10) & 3) << 3;
+                                    int rd = (opcode >> 12) & 0xf;
+
+                                    s8 operand = (r[rm] >> rotate) | (r[rm] << (32 - rotate));
+                                    r[rd] = (u32)(s32)operand;
+                                }
+                                else printf("SXTAB\n");
+                                break;
+                            }
+                            case 3:
+                            {
+                                if(r15) printf("SXTH\n");
+                                else printf("SXTAH\n");
+                                break;
+                            }
+                            case 4:
+                            {
+                                if(r15) printf("UXTB16\n");
+                                else printf("UXTAB16\n");
+                                break;
+                            }
+                            case 6:
+                            {
+                                if(r15) printf("UXTB\n");
+                                else printf("UXTAB\n");
+                                break;
+                            }
+                            case 7:
+                            {
+                                if(r15) printf("UXTH16\n");
+                                else printf("UXTAH16\n");
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    case 2:
+                    {
+                        switch((opcode >> 20) & 7)
+                        {
+                            case 0: printf("SEL\n"); break;
+                            case 3: printf("REV16\n"); break;
+                            case 7: printf("REVSH\n"); break;
+                        }
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                if((opcode >> 21) & 1)
+                {
+                    if((opcode >> 22) & 1) printf("USAT\n");
+                    else printf("SSAT\n");
+                }
+                else
+                {
+                    if((opcode >> 6) & 1) printf("PKHTB\n");
+                    else printf("PKHBT\n");
+                }
+            }
+            break;
+        }
+        case 2:
+        {
+            switch((opcode >> 20) & 7)
+            {
+                case 0:
+                {
+                    bool r15 = ((opcode >> 12) & 0xf) == 0xf;
+
+                    switch((opcode >> 6) & 3)
+                    {
+                        case 0:
+                        {
+                            if(r15) printf("SMUAD\n");
+                            else printf("SMLAD\n");
+                            break;
+                        }
+                        case 1:
+                        {
+                            if(r15) printf("SMUAD\n");
+                            else printf("SMLAD\n");
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case 4:
+                {
+                    switch((opcode >> 6) & 3)
+                    {
+                        case 0: printf("SMLALD\n"); break;
+                        case 1: printf("SMLSLD\n"); break;
+                    }
+                    break;
+                }
+                case 5:
+                {
+                    switch((opcode >> 6) & 3)
+                    {
+                        case 0:
+                        {
+                            if(((opcode >> 12) & 0xf) == 0xf) printf("SMMUL\n");
+                            else printf("SMMLA\n");
+                            break;
+                        }
+                        case 3: printf("SMMLS\n"); break;
+                    }
+                    break;
+                }
+            }
+            break;
+        }
+        case 3:
+        {
+            if(((opcode >> 12) & 0xf) == 0xf) printf("USADA8\n");
+            else printf("USAD8\n");
+            break;
         }
     }
 }
@@ -384,6 +644,115 @@ void arm_cpu::tick()
         if(type == arm_type::arm11) dev2g->do_print = true;
         else if(type == arm_type::cortex_a8) dev3gs->do_print = true;
     }
+
+    if(reset)
+    {
+        arm_mode old_mode = cpsr.mode;
+
+        cpsr.mode = mode_undefined;
+
+        u32 saved_reg[15];
+
+        switch(old_mode)
+        {
+        case mode_user:
+        case mode_system:
+        {
+            for(int i = 0; i < 15; i++)
+            {
+                saved_reg[i] = r[i];
+            }
+            break;
+        }
+        case mode_fiq:
+        {
+            for(int i = 8; i < 15; i++)
+            {
+                saved_reg[i] = r[i];
+            }
+            break;
+        }
+        case mode_irq:
+        case mode_supervisor:
+        case mode_abort:
+        case mode_undefined:
+        {
+            for(int i = 13; i < 15; i++)
+            {
+                saved_reg[i] = r[i];
+            }
+            break;
+        }
+        }
+
+        switch(cpsr.mode)
+        {
+        case mode_user:
+        case mode_system:
+        {
+            for(int i = 0; i < 15; i++)
+            {
+                r[i] = saved_reg[i];
+            }
+            break;
+        }
+        case mode_fiq:
+        {
+            r8_fiq = saved_reg[8];
+            r9_fiq = saved_reg[9];
+            r10_fiq = saved_reg[10];
+            r11_fiq = saved_reg[11];
+            r12_fiq = saved_reg[12];
+            r13_fiq = saved_reg[13];
+            r14_fiq = saved_reg[14];
+            break;
+        }
+        case mode_irq:
+        {
+            r13_irq = saved_reg[13];
+            r14_irq = saved_reg[14];
+            break;
+        }
+        case mode_supervisor:
+        {
+            r13_svc = saved_reg[13];
+            r14_svc = saved_reg[14];
+            break;
+        }
+        case mode_abort:
+        {
+            r13_abt = saved_reg[13];
+            r14_abt = saved_reg[14];
+            break;
+        }
+        case mode_undefined:
+        {
+            r13_und = saved_reg[13];
+            r14_und = saved_reg[14];
+            break;
+        }
+        }
+        switch(type)
+        {
+            case arm_type::arm11: cp15.control_arm11.high_vectors ? r[15] = 0xffff0000 : r[15] = 0x00; break;
+            case arm_type::cortex_a8: cp15.control_cortex_a8.high_vectors ? r[15] = 0xffff0000 : r[15] = 0x00; break;
+        }
+        switch(type)
+        {
+            case arm_type::arm11: cpsr.endianness = cp15.control_arm11.endian_on_exception; break;
+            case arm_type::cortex_a8: cpsr.endianness = cp15.control_cortex_a8.endian_on_exception; break;
+        }
+        cpsr.thumb = false;
+        cpsr.jazelle = false;
+        cpsr.irq_disable = true;
+        cpsr.fiq_disable = true;
+        cpsr.abort_disable = true;
+        reset = false;
+
+        next_opcode = rw(r[15]);
+        r[15] += 4;
+    }
+
     if(data_abort && !cpsr.abort_disable && abort_enable)
     {
         arm_mode old_mode = cpsr.mode;
@@ -800,15 +1169,20 @@ void arm_cpu::tick()
     if(!data_abort) abort_enable = true;
     if(!undefined) undefined_enable = true;
 
-    u32 opcode = 0;
     //for(int i = 0; i < 14; i++)
     //{
     //    printf("R%d: %08x\n", i, r[i]);
     //}
     if(!cpsr.thumb)
     {
-        opcode = rw(r[15]);
-        printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
+        bool old_just_branched = just_branched;
+        opcode = next_opcode;
+        next_opcode = rw(r[15]);
+        r[15] += 4;
+        just_branched = false;
+        u32 true_r15 = r[15] - 4;
+        if(true_r15 != 0) true_r15 -= 4;
+        printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR4:%08x\nR12:%08x\nCPSR:%08x\n", opcode, true_r15, r[14], r[13], r[0], r[1], r[2], r[4], r[12], cpsr.whole);
         bool condition = false;
         switch(opcode >> 28)
         {
@@ -939,7 +1313,7 @@ void arm_cpu::tick()
                             int rdhi = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
 
-                            u64 result = (u64)r[rm] * r[rs];
+                            u64 result = (u64)r[rm] * (u64)r[rs];
                             r[rdlo] = (u32)result;
                             r[rdhi] = result >> 32;
 
@@ -1386,12 +1760,10 @@ void arm_cpu::tick()
                                         int rm = opcode & 0xf;
                                         if(condition)
                                         {
-                                            if(rm != 15)
-                                            {
-                                                r[15] = (r[rm] & 0xfffffffe);
-                                                //r[15] -= 4;
-                                            }
+                                            r[15] = (r[rm] & 0xfffffffe);
+                                            if(rm == 15) r[15] += 8;
                                             cpsr.thumb = r[rm] & 1;
+                                            just_branched = true;
                                         }
                                     }
                                     break;
@@ -1402,8 +1774,10 @@ void arm_cpu::tick()
                                     int rm = opcode & 0xf;
                                     if(condition)
                                     {
-                                        if(rm != 15) r[15] = (r[rm] & 0xfffffffe);
+                                        r[15] = (r[rm] & 0xfffffffe);
+                                        if(rm == 15) r[15] += 8;
                                         cpsr.thumb = r[rm] & 1;
+                                        just_branched = true;
                                     }
                                     break;
                                 }
@@ -1413,7 +1787,11 @@ void arm_cpu::tick()
                                     int rm = opcode & 0xf;
 
                                     u32 oldpc = r[15];
-                                    r[15] = (r[rm] - 4) & 0xfffffffe;
+                                    if(rm != 15)
+                                    {
+                                        r[15] = (r[rm] - 4) & 0xfffffffe;
+                                        just_branched = true;
+                                    }
                                     cpsr.thumb = r[rm] & 1;
                                     r[14] = oldpc + 4;
                                     break;
@@ -1454,7 +1832,7 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             int rn = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
 
                             r[rd] = r[rn] & shift_operand;
 
@@ -1497,7 +1875,7 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             int rn = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
 
                             r[rd] = r[rn] ^ shift_operand;
 
@@ -1540,7 +1918,7 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             int rn = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
                             u64 result64 = (u64)r[rn] - shift_operand;
                             u32 result = (u32)result64;
 
@@ -1548,7 +1926,7 @@ void arm_cpu::tick()
                             {
                                 cpsr.carry = result64 < 0x100000000LL;
                                 cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
-                                cpsr.sign = result & 0x80000000;
+                                cpsr.sign = (result & 0x80000000) >> 31;
                                 cpsr.zero = !result;
                             }
 
@@ -1583,7 +1961,7 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             int rn = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
                             u64 result64 = (u64)shift_operand - r[rn];
                             u32 result = (u32)result64;
 
@@ -1591,7 +1969,7 @@ void arm_cpu::tick()
                             {
                                 cpsr.carry = result64 < 0x100000000LL;
                                 cpsr.overflow = ((shift_operand ^ r[rn]) & (shift_operand ^ result) & 0x80000000);
-                                cpsr.sign = result & 0x80000000;
+                                cpsr.sign = (result & 0x80000000) >> 31;
                                 cpsr.zero = !result;
                             }
 
@@ -1626,7 +2004,7 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             int rn = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
                             u64 result64 = (u64)r[rn] + shift_operand;
                             u32 result = (u32)result64;
 
@@ -1634,13 +2012,11 @@ void arm_cpu::tick()
                             {
                                 cpsr.carry = result64 & 0x100000000ULL;
                                 cpsr.overflow = (~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
-                                cpsr.sign = result & 0x80000000;
+                                cpsr.sign = (result & 0x80000000) >> 31;
                                 cpsr.zero = !result;
                             }
 
                             r[rd] = result;
-
-                            if(rn == 15) r[rd] += 4;
 
                             if(s && (rd == 15))
                             {
@@ -1671,7 +2047,7 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             int rn = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
                             u64 result64 = (u64)r[rn] + shift_operand + cpsr.carry;
                             u32 result = (u32)result64;
 
@@ -1679,7 +2055,7 @@ void arm_cpu::tick()
                             {
                                 cpsr.carry = result64 & 0x100000000ULL;
                                 cpsr.overflow = (~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
-                                cpsr.sign = result & 0x80000000;
+                                cpsr.sign = (result & 0x80000000) >> 31;
                                 cpsr.zero = !result;
                             }
 
@@ -1714,7 +2090,7 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             int rn = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
                             u64 result64 = (u64)r[rn] - shift_operand - ~cpsr.carry;
                             u32 result = (u32)result64;
 
@@ -1722,7 +2098,7 @@ void arm_cpu::tick()
                             {
                                 cpsr.carry = result64 < 0x100000000LL;
                                 cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
-                                cpsr.sign = result & 0x80000000;
+                                cpsr.sign = (result & 0x80000000) >> 31;
                                 cpsr.zero = !result;
                             }
 
@@ -1757,7 +2133,7 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             int rn = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
                             u64 result64 = (u64)shift_operand - r[rn] - ~cpsr.carry;
                             u32 result = (u32)result64;
 
@@ -1765,7 +2141,7 @@ void arm_cpu::tick()
                             {
                                 cpsr.carry = result64 < 0x100000000LL;
                                 cpsr.overflow = ((shift_operand ^ r[rn]) & (shift_operand ^ result) & 0x80000000);
-                                cpsr.sign = result & 0x80000000;
+                                cpsr.sign = (result & 0x80000000) >> 31;
                                 cpsr.zero = !result;
                             }
 
@@ -1798,10 +2174,10 @@ void arm_cpu::tick()
                         {
                             printf("TST\n");
                             int rn = (opcode >> 16) & 0xf;
-                            u32 shift_operand = get_shift_operand(opcode, true);
+                            u32 shift_operand = get_shift_operand(true);
                             u32 result = r[rn] & shift_operand;
 
-                            cpsr.sign = result & 0x80000000;
+                            cpsr.sign = (result & 0x80000000) >> 31;
                             cpsr.zero = !result;
                             break;
                         }
@@ -1809,11 +2185,11 @@ void arm_cpu::tick()
                         {
                             printf("TEQ\n");
                             int rn = (opcode >> 16) & 0xf;
-                            u32 shift_operand = get_shift_operand(opcode, true);
+                            u32 shift_operand = get_shift_operand(true);
 
                             u32 result = r[rn] ^ shift_operand;
 
-                            cpsr.sign = result & 0x80000000;
+                            cpsr.sign = (result & 0x80000000) >> 31;
                             cpsr.zero = !result;
                             break;
                         }
@@ -1821,13 +2197,13 @@ void arm_cpu::tick()
                         {
                             printf("CMP\n");
                             int rn = (opcode >> 16) & 0xf;
-                            u32 shift_operand = get_shift_operand(opcode, true);
+                            u32 shift_operand = get_shift_operand(true);
                             u64 result64 = (u64)r[rn] - shift_operand;
                             u32 result = (u32)result64;
 
-                            cpsr.carry = result64 < 0x100000000LL;
-                            cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
-                            cpsr.sign = result & 0x80000000;
+                            cpsr.carry = (s64)result64 < 0x100000000LL;
+                            cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000) >> 31;
+                            cpsr.sign = (result & 0x80000000) >> 31;
                             cpsr.zero = !result;
                             break;
                         }
@@ -1835,13 +2211,13 @@ void arm_cpu::tick()
                         {
                             printf("CMN\n");
                             int rn = (opcode >> 16) & 0xf;
-                            u32 shift_operand = get_shift_operand(opcode, true);
+                            u32 shift_operand = get_shift_operand(true);
                             u64 result64 = (u64)r[rn] + shift_operand;
                             u32 result = (u32)result64;
 
                             cpsr.carry = result64 & 0x100000000ULL;
                             cpsr.overflow = (~(r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000);
-                            cpsr.sign = result & 0x80000000;
+                            cpsr.sign = (result & 0x80000000) >> 31;
                             cpsr.zero = !result;
                             break;
                         }
@@ -1851,7 +2227,7 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             int rn = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
 
                             r[rd] = r[rn] | shift_operand;
 
@@ -1891,14 +2267,21 @@ void arm_cpu::tick()
                         case 0xd:
                         {
                             printf("MOV\n");
+                            if(r[15] == 0x000001c4)
+                            {
+                                printf("NOT ANOTHER FUCKING BRANCHING ERROR\n");
+                            }
                             int rm = opcode & 0xf;
                             int rd = (opcode >> 12) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
 
                             r[rd] = shift_operand;
 
-                            if((rd == 15) && (rm != 14)) r[15] += 4;
+                            if(rd == 15)
+                            {
+                                just_branched = true;
+                            }
 
                             if(s)
                             {
@@ -1939,7 +2322,7 @@ void arm_cpu::tick()
                             int rd = (opcode >> 12) & 0xf;
                             int rn = (opcode >> 16) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
 
                             r[rd] = r[rn] & ~shift_operand;
 
@@ -1981,7 +2364,7 @@ void arm_cpu::tick()
                             printf("MVN\n");
                             int rd = (opcode >> 12) & 0xf;
                             bool s = (opcode >> 20) & 1;
-                            u32 shift_operand = get_shift_operand(opcode, s && (rd != 15));
+                            u32 shift_operand = get_shift_operand(s && (rd != 15));
 
                             r[rd] = ~shift_operand;
 
@@ -2028,7 +2411,8 @@ void arm_cpu::tick()
             {
                 if(((opcode >> 4) & 1) && ((opcode >> 25) & 1))
                 {
-                    printf("Unknown media!\n");
+                    //printf("Unknown media!\n");
+                    tick_media(opcode);
                 }
                 else
                 {
@@ -2038,7 +2422,7 @@ void arm_cpu::tick()
                         {
                             printf("LDRB\n");
                             int rd = (opcode >> 12) & 0xf;
-                            u32 addr = get_load_store_addr(opcode);
+                            u32 addr = get_load_store_addr();
                             u32 data = rw(addr);
                             data >>= ((addr & 3) << 3);
                             data &= 0xff;
@@ -2048,7 +2432,7 @@ void arm_cpu::tick()
                         {
                             printf("LDR\n");
                             int rd = (opcode >> 12) & 0xf;
-                            u32 addr = get_load_store_addr(opcode);
+                            u32 addr = get_load_store_addr();
                             u32 data = rw(addr & 0xfffffffc);
                             if(!cp15.control_arm11.unaligned_access_enable && ((addr & 3) != 0) && (type == arm_type::arm11))
                             {
@@ -2064,9 +2448,9 @@ void arm_cpu::tick()
 
                             if(rd == 15)
                             {
-                                r[15] -= 4;
                                 cpsr.thumb = data & 1;
                                 r[15] &= 0xfffffffe;
+                                just_branched = true;
                             }
                         }
                     }
@@ -2076,7 +2460,7 @@ void arm_cpu::tick()
                         {
                             printf("STRB\n");
                             int rd = (opcode >> 12) & 0xf;
-                            u32 addr = get_load_store_addr(opcode);
+                            u32 addr = get_load_store_addr();
                             u32 data = rw(addr);
                             data &= ~(0xff << ((addr & 3) << 3));
                             data |= (r[rd] & 0xff) << ((addr & 3) << 3);
@@ -2086,7 +2470,7 @@ void arm_cpu::tick()
                         {
                             printf("STR\n");
                             int rd = (opcode >> 12) & 0xf;
-                            u32 addr = get_load_store_addr(opcode);
+                            u32 addr = get_load_store_addr();
                             u32 data = rw(addr);
                             ww(addr, r[rd]);
                         }
@@ -2109,7 +2493,7 @@ void arm_cpu::tick()
                     {
                         arm_mode oldmode = cpsr.mode;
                         if(s && !pc) cpsr.mode = mode_user;
-                        u32 addr = get_load_store_multi_addr(opcode) & 0xfffffffc;
+                        u32 addr = get_load_store_multi_addr() & 0xfffffffc;
                         for(int i = 0; i < 15; i++)
                         {
                             if(reg_list & (1 << i))
@@ -2125,6 +2509,7 @@ void arm_cpu::tick()
                         {
                             u32 data = rw(addr);
                             r[15] = data & 0xfffffffe;
+                            just_branched = true;
                             cpsr.thumb = data & 1;
                             if(s)
                             {
@@ -2200,8 +2585,16 @@ void arm_cpu::tick()
                 u32 addr = opcode & 0xffffff;
                 if(addr & 0x800000) addr |= 0xff000000;
 
-                if((opcode >> 24) & 1) r[14] = r[15];
-                r[15] += (addr << 2) + 4;
+                if(condition)
+                {
+                    if((opcode >> 24) & 1)
+                    {
+                        r[14] = r[15] - 4;
+                        just_branched = true;
+                    }
+                    r[15] += addr << 2;
+                    just_branched = true;
+                }
                 break;
             }
             case 6:
@@ -2949,6 +3342,8 @@ void arm_cpu::tick()
                     if(opcode & 0x800000) offset |= 0xff000000;
                     int h = (opcode >> 24) & 1;
                     r[15] += (offset << 2) + (h << 1);
+                    cpsr.thumb = true;
+                    just_branched = true;
                 }
                 else
                 {
@@ -2974,13 +3369,19 @@ void arm_cpu::tick()
             }
         }
 
-        r[15] += 4;
+        if(just_branched)
+        {
+            next_opcode = rw(r[15]);
+            r[15] += 4;
+            just_branched = false;
+        }
     }
     else
     {
-        opcode = rw(r[15] & 0xfffffffc);
-        if(r[15] & 2) opcode >>= 16;
-        else opcode &= 0xffff;
+        opcode = next_opcode;
+        next_opcode = rw(r[15]);
+        if(r[15] & 2) next_opcode >>= 16;
+        else next_opcode &= 0xffff;
         u32 opcode_2 = 0;
         if((((opcode >> 13) & 7) == 7) && (type == arm_type::cortex_a8))
         {
@@ -2994,6 +3395,7 @@ void arm_cpu::tick()
             else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR3:%08x\nR4:%08x\nR6:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[3], r[4], r[6], r[12], cpsr.whole);
         }
         else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR3:%08x\nR4:%08x\nR6:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[3], r[4], r[6], r[12], cpsr.whole);
+        just_branched = false;
 
         switch((opcode >> 13) & 7)
         {
@@ -3291,7 +3693,6 @@ void arm_cpu::tick()
                             int rd = (opcode & 7) | (h1 << 3);
                             int rm = ((opcode >> 3) & 7) | (h2 << 3);
                             r[rd] = r[rm];
-                            if(rd == 15) r[15] -= 2;
                             break;
                         }
                         case 3:
@@ -3302,8 +3703,9 @@ void arm_cpu::tick()
                                 int rm = (opcode >> 3) & 7;
 
                                 r[14] = (r[15] + 2) | 1;
-                                r[15] = (r[rm] - 2) & 0xfffffffe;
+                                r[15] = r[rm] & 0xfffffffe;
                                 cpsr.thumb = r[rm] & 1;
+                                just_branched = true;
                             }
                             else
                             {
@@ -3311,18 +3713,18 @@ void arm_cpu::tick()
                                 int rm = (opcode >> 3) & 0xf;
                                 if(rm != 15)
                                 {
-                                    r[15] = (r[rm] - 2) & 0xfffffffe;
                                     cpsr.thumb = r[rm] & 1;
+                                    r[15] = r[rm] & 0xfffffffe;
+                                    just_branched = true;
                                 }
                                 else
                                 {
+                                    cpsr.thumb = r[15] & 1;
                                     u32 oldpc = r[15];
-                                    r[15] = (r[15] + 2) & 0xfffffffe;
-                                    if(!(oldpc & 3))
-                                    {
-                                        cpsr.thumb = false;
-                                    }
+                                    r[15] = (r[15] + 4) &  0xfffffffe;
+                                    just_branched = true;
                                 }
+                                just_branched = true;
                             }
                             break;
                         }
@@ -3469,7 +3871,7 @@ void arm_cpu::tick()
                             int rn = opcode & 7;
                             u64 result64 = (u64)r[rn] + r[rm];
                             u32 result = (u32)result64;
-                            cpsr.sign = result & 0x80000000;
+                            cpsr.sign = (result & 0x80000000) >> 31;
                             cpsr.zero = result == 0;
                             cpsr.carry = result64 & 0x100000000ULL;
                             cpsr.overflow = (~(r[rn] ^ r[rm]) & (r[rn] ^ result) & 0x80000000);
@@ -3661,9 +4063,10 @@ void arm_cpu::tick()
                         if((opcode >> 8) & 1)
                         {
                             u32 data = rw(r[13]);
-                            r[15] = (data - 2) & 0xfffffffe;
+                            r[15] = data & 0xfffffffe;
                             cpsr.thumb = data & 1;
                             r[13] += 4;
+                            just_branched = true;
                         }
                     }
                     else
@@ -3707,6 +4110,7 @@ void arm_cpu::tick()
                             case arm_type::arm11: r[15] = cp15.control_arm11.high_vectors ? 0xffff000c : 0x0c; break;
                             case arm_type::cortex_a8: r[15] = cp15.control_cortex_a8.high_vectors ? 0xffff000c : 0x0c; break;
                         }
+                        just_branched = true;
                     }
                     else
                     {
@@ -3819,7 +4223,11 @@ void arm_cpu::tick()
                         cond_met = true;
                         break;
                     }
-                    if(cond_met) r[15] = (u32)((r[15] + 2) + ((s32)(s8)imm << 1));
+                    if(cond_met)
+                    {
+                        r[15] = (u32)(r[15] + ((s32)(s8)imm << 1));
+                        just_branched = true;
+                    }
                     }
                 }
             }
@@ -3884,7 +4292,8 @@ void arm_cpu::tick()
                 s32 imm = (opcode & 0x7ff) << 1;
                 if(imm & 0x800) imm |= 0xfffff000;
 
-                r[15] = (u32)((r[15] + 2) + imm);
+                r[15] = (u32)(r[15] + imm);
+                just_branched = true;
             }
             else if(type == arm_type::arm11)
             {
@@ -3900,8 +4309,9 @@ void arm_cpu::tick()
                         {
                             u32 oldpc = r[15];
                             r[15] = (r[14] + (imm << 1)) & 0xfffffffc;
-                            r[14] = (oldpc) | 1;
+                            r[14] = (oldpc + 2) | 1;
                             cpsr.thumb = false;
+                            just_branched = true;
                             break;
                         }
                         case 2:
@@ -3915,6 +4325,7 @@ void arm_cpu::tick()
                             u32 oldpc = r[15];
                             r[15] = (r[14] + (imm << 1)) + 2;
                             r[14] = (oldpc + 2) | 1;
+                            just_branched = true;
                             break;
                         }
                     }
@@ -4204,10 +4615,11 @@ void arm_cpu::tick()
                                     }
                                     u32 imm_32 = (s << 24) | (i1 << 23) | (i2 << 22) | (imm_10h << 12) | (imm_10l << 2);
                                     if(imm_32 & (1 << 24)) imm_32 |= 0xfe000000;
-                                    r[14] = ((r[15] + 4) & 0xfffffffe) | 1;
+                                    r[14] = ((r[15] + 2) & 0xfffffffe) | 1;
                                     r[15] += (s32)imm_32;
                                     r[15] &= 0xfffffffc;
                                     cpsr.thumb = false;
+                                    just_branched = true;
                                     break;
                                 }
                                 case 5: case 7:
@@ -4225,6 +4637,7 @@ void arm_cpu::tick()
                                     if(imm_32 & (1 << 24)) imm_32 |= 0xfe000000;
                                     r[14] = ((r[15] + 2) & 0xfffffffe) | 1;
                                     r[15] += (s32)imm_32;
+                                    just_branched = true;
                                     break;
                                 }
                             }
@@ -4241,7 +4654,13 @@ void arm_cpu::tick()
             break;
         }
         }
-        r[15] += 2;
+        if(just_branched)
+        {
+            next_opcode = rw(r[15]);
+            if(r[15] & 2) next_opcode >>= 16;
+            else next_opcode &= 0xffff;
+            r[15] += 2;
+        }
     }
 }
 

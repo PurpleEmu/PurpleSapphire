@@ -12,6 +12,8 @@ if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 endif()
 
 set(SOURCES
+src/aes.cpp
+src/aes.h
 src/arm.cpp
 src/arm.h
 src/clock.cpp
@@ -19,6 +21,8 @@ src/clock.h
 src/common.h
 src/cp15.cpp
 src/cp15.h
+src/dmac.cpp
+src/dmac.h
 src/gpio.cpp
 src/gpio.h
 src/iphone2g.cpp
@@ -28,10 +32,14 @@ src/iphone3gs.h
 src/main.cpp
 src/power.cpp
 src/power.h
+src/sha1.cpp
+src/sha1.h
 src/spi.cpp
 src/spi.h
 src/timer.cpp
 src/timer.h
+src/usb_otg.cpp
+src/usb_otg.h
 src/usb_phy.cpp
 src/usb_phy.h
 src/vic.cpp
@@ -42,4 +50,4 @@ src/wdt.h
 
 add_executable(purplesapphire ${SOURCES})
 
-target_link_libraries(purplesapphire)
+target_link_libraries(purplesapphire -lcrypto)

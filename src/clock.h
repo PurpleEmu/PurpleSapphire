@@ -31,7 +31,17 @@ struct clock1_t
         u32 con, cnt;
     } plls[4];
 
-    u32 pll_lock, pll_mode;
+    u32 pll_lock;
+    union
+    {
+        struct
+        {
+            u32 pll_onoff : 4;
+            u32 pll_divider_mode : 4;
+            u32 unknown : 24;
+        };
+        u32 whole;
+    } pll_mode;
 
     u32 cl2_gates;
     u32 cl3_gates;

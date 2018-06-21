@@ -19,6 +19,7 @@ u32 power_t::rw(u32 addr)
         case 0x44: return (0x3 << 24); //this is mostly to appease openiboot
         case 0x6c: return config2;
     }
+    return 0;
 }
 
 void power_t::ww(u32 addr, u32 data)

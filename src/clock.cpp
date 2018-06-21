@@ -49,7 +49,7 @@ u32 clock1_t::rw(u32 addr)
         case 0x038: return plls[2].cnt;
         case 0x03c: return plls[3].cnt;
         case 0x040: return pll_lock;
-        case 0x044: return pll_mode;
+        case 0x044: return pll_mode.whole;
         case 0x048: return cl2_gates;
         case 0x04c: return cl3_gates;
     }
@@ -72,7 +72,7 @@ void clock1_t::ww(u32 addr, u32 data)
         case 0x038: plls[2].cnt = data; break;
         case 0x03c: plls[3].cnt = data; break;
         case 0x040: pll_lock = data; break;
-        case 0x044: pll_mode = data & 0x1ff; break;
+        case 0x044: pll_mode.whole = data & 0xf01ff; break;
         case 0x048: cl2_gates = data; break;
         case 0x04c: cl3_gates = data; break;
     }

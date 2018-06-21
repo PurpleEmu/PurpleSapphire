@@ -13,6 +13,7 @@ u32 usb_phy_t::rw(u32 addr)
         case 0x004: return ophyclk;
         case 0x008: return orstcon;
         case 0x020: return ophytune;
+        case 0x028: return 0x00000000; //a hack to get the bootrom further
     }
     return 0;
 }

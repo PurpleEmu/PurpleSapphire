@@ -22,6 +22,12 @@ struct arm_cpu
     bool hle;
     bool do_print;
 
+    bool just_branched;
+
+    u32 opcode;
+    u32 opcode_2;
+    u32 next_opcode;
+
     union
     {
         struct
@@ -63,6 +69,7 @@ struct arm_cpu
     bool fiq, irq, fiq_enable, irq_enable;
     bool data_abort, abort_enable;
     bool undefined, undefined_enable;
+    bool reset;
 
     union
     {
@@ -183,9 +190,6 @@ struct arm_cpu
 
     void* device;
 
-    u32 next_opcode;
-    u32 opcode;
-
     std::function<u32(void*,u32)> rw_real;
     std::function<void(void*,u32,u32)> ww_real;
 
@@ -195,10 +199,11 @@ struct arm_cpu
     u32 rw(u32 addr);
     void ww(u32 addr, u32 data);
 
-    u32 get_load_store_addr(u32 opcode);
-    u32 get_load_store_multi_addr(u32 opcode);
-    u32 get_shift_operand(u32 opcode, bool s);
+    u32 get_load_store_addr();
+    u32 get_load_store_multi_addr();
+    u32 get_shift_operand(bool s);
 
+    void tick_media(u32 opcode);
     void tick();
     void run(int insns);
 };

@@ -1,12 +1,16 @@
 #pragma once
 
 #include "common.h"
+#include "aes.h"
 #include "arm.h"
 #include "clock.h"
+#include "dmac.h"
 #include "gpio.h"
 #include "power.h"
+#include "sha1.h"
 #include "spi.h"
 #include "timer.h"
+#include "usb_otg.h"
 #include "usb_phy.h"
 #include "vic.h"
 #include "wdt.h"
@@ -14,16 +18,17 @@
 struct iphone2g
 {
     u8* bootrom; //[0x8000000]
-    u8* amc0; //[0x400000]
     u8* nor; //[0x100000]
     u8* iboot; //[0x48000]
     u8* ram; //[0x8000000]
+    u8* sram; //[0x500000]
 
     arm_cpu* cpu;
 
     bool hle;
     bool do_print;
 
+    FILE* reg_access_log;
     FILE* serial_buffer_log;
 
     vic vics[2];
@@ -35,6 +40,10 @@ struct iphone2g
     spi_t spi[3];
     usb_phy_t usb_phy;
     power_t power;
+    sha1_t sha1;
+    aes_t aes;
+    dmac dmacs[2];
+    usb_otg_t usb_otg;
 
     void init();
     void init_hle();

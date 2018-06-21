@@ -48,12 +48,13 @@ void spi_t::ww(u32 addr, u32 data)
                 cmd = tx_data;
                 dev->interrupt(interrupt, true);
             }
+            ctrl = data;
             break;
         }
         case 0x04: setup = data; break;
         case 0x08:
         {
-            status = 0;
+            status = data & 0x00000fff;
             dev->interrupt(interrupt, false);
             break;
         }

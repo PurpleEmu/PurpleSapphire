@@ -10,11 +10,19 @@ void timer::init()
 void timer::tick()
 {
     iphone2g* dev = (iphone2g*) device;
-    if((config & 0x7000) == 0x7000)
+    if(state & 1)
     {
-        count++;
-        if(count == 0) dev->interrupt(0x07, true);
+        count--;
+        if(count == 0)
+        {
+            if(config & 0x7000) dev->interrupt(0x07, true);
+        }
     }
+}
+
+void timer::update()
+{
+    count = (count_buffer * 100) + count_buffer2; //a guess based on how openiboot sets these up
 }
 
 u32 timer::rw(u32 addr)
@@ -36,7 +44,12 @@ void timer::ww(u32 addr, u32 data)
     switch(addr & 0x1f)
     {
         case 0x00: config = data; break;
-        case 0x04: state = data; break;
+        case 0x04:
+        {
+            state = data & 1;
+            if(data & 2) update();
+            break;
+        }
         case 0x08: count_buffer = data; break;
         case 0x0c: count_buffer2 = data; break;
         case 0x10: prescaler = data; break;
@@ -59,6 +72,8 @@ void timers_t::tick()
     for(int i = 0; i < 7; i++)
     {
         if(timers[i].state & 1) timers[i].tick();
+        ticks_low++;
+        if(ticks_low == 0) ticks_high++;
     }
 }
 
