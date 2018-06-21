@@ -191,9 +191,9 @@ u32 vic::rw(u32 addr)
 {
     if(addr & 3) return 0;
 
-    if(addr >= 0xfe0 && addr < 0x1000) return id[(addr & 0x1c) >> 2];
-    if(addr >= 0x100 && addr < 0x180) return vect_addr[(addr & 0x7f) >> 2];
-    if(addr >= 0x200 && addr < 0x280) return vect_priority[(addr & 0x7f) >> 2];
+    if(addr >= 0xfe0 && addr < 0x1000) return id[(addr >> 2) & 7];
+    if(addr >= 0x100 && addr < 0x180) return vect_addr[(addr >> 2) & 0x1f];
+    if(addr >= 0x200 && addr < 0x280) return vect_priority[(addr >> 2) & 0x1f];
 
     switch(addr & 0xfff)
     {

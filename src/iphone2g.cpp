@@ -353,6 +353,7 @@ u32 iphone2g_rw(void* dev, u32 addr)
 void iphone2g_ww(void* dev, u32 addr, u32 data)
 {
     iphone2g* device = (iphone2g*) dev;
+    addr &= 0xfffffffc;
     if((addr < 0x08000000) && device->hle)
     {
         device->bootrom[(addr+0) & 0x7ffffff] = (data >> 0) & 0xff;
