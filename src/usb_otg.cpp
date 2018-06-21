@@ -9,8 +9,8 @@ u32 usb_otg_t::rw(u32 addr)
 {
     u32 usb_addr = addr & 0x3fff;
     if(usb_addr >= 0x104 && usb_addr < 0x144) dieptxf[((usb_addr - 4) >> 2) & 0xf];
-    if(usb_addr >= 0x900 && usb_addr < 0xb00) usb_inregs[(usb_addr >> 2)];
-    if(usb_addr >= 0xb00 && usb_addr < 0xd00) usb_outregs[(usb_addr >> 2)];
+    if(usb_addr >= 0x900 && usb_addr < 0xb00) usb_inregs[((usb_addr - 0x900) >> 2)];
+    if(usb_addr >= 0xb00 && usb_addr < 0xd00) usb_outregs[((usb_addr - 0xb00) >> 2)];
     if(usb_addr >= 0x1000 && usb_addr < 0x2100) usb_fifo[((usb_addr - 0x1000) >> 2)];
     switch(usb_addr)
     {
@@ -50,8 +50,8 @@ void usb_otg_t::ww(u32 addr, u32 data)
 {
     u32 usb_addr = addr & 0x1fff;
     if(usb_addr >= 0x104 && usb_addr < 0x144) dieptxf[((usb_addr - 4) >> 2) & 0xf] = data;
-    if(usb_addr >= 0x900 && usb_addr < 0xb00) usb_inregs[(usb_addr >> 2)] = data;
-    if(usb_addr >= 0xb00 && usb_addr < 0xd00) usb_outregs[(usb_addr >> 2)] = data;
+    if(usb_addr >= 0x900 && usb_addr < 0xb00) usb_inregs[((usb_addr - 0x900) >> 2)] = data;
+    if(usb_addr >= 0xb00 && usb_addr < 0xd00) usb_outregs[((usb_addr - 0xb00) >> 2)] = data;
     if(usb_addr >= 0x1000 && usb_addr < 0x2100) usb_fifo[((usb_addr - 0x1000) >> 2)] = data;
     switch(usb_addr)
     {

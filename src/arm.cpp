@@ -186,7 +186,8 @@ u32 arm_cpu::get_shift_operand(bool s)
         //Immediate
         u8 imm = shift_operand & 0xff;
         u8 rotate_imm = ((shift_operand >> 8) & 0xf) << 1;
-        u32 operand = (imm >> rotate_imm) | (imm << (32 - rotate_imm));
+        u32 operand = imm;
+        if(rotate_imm != 0) operand = (imm >> rotate_imm) | (imm << (32 - rotate_imm));
         if(s && (rotate_imm != 0)) cpsr.carry = (operand >> 31) & 1;
         return operand;
     }
@@ -222,7 +223,7 @@ u32 arm_cpu::get_shift_operand(bool s)
             else if((r[rs] & 0xff) < 32)
             {
                 operand = r[rm] << (r[rs] & 0xff);
-                if(s) cpsr.carry = r[rm] & (1 << (32 - (r[rs] & 0xff))) ? 1 : 0;
+                if(s) cpsr.carry = (r[rm] & (1 << (32 - (r[rs] & 0xff)))) ? 1 : 0;
             }
             else if((r[rs] & 0xff) == 32)
             {
@@ -249,7 +250,7 @@ u32 arm_cpu::get_shift_operand(bool s)
             else
             {
                 operand = r[rm] >> shift_imm;
-                if(s) cpsr.carry = r[rm] & (1 << (shift_imm - 1)) ? 1 : 0;
+                if(s) cpsr.carry = (r[rm] & (1 << (32 - shift_imm))) ? 1 : 0;
             }
             return operand;
         }
@@ -263,7 +264,7 @@ u32 arm_cpu::get_shift_operand(bool s)
             else if((r[rs] & 0xff) < 32)
             {
                 operand = r[rm] >> (r[rs] & 0xff);
-                if(s) cpsr.carry = r[rm] & (1 << ((r[rs] & 0xff) - 1)) ? 1 : 0;
+                if(s) cpsr.carry = (r[rm] & (1 << (32 - (r[rs] & 0xff)))) ? 1 : 0;
             }
             else if((r[rs] & 0xff) == 32)
             {
@@ -291,7 +292,7 @@ u32 arm_cpu::get_shift_operand(bool s)
             else
             {
                 operand = (s32)r[rm] >> shift_imm;
-                if(s) cpsr.carry = r[rm] & (1 << (shift_imm - 1)) ? 1 : 0;
+                if(s) cpsr.carry = (r[rm] & (1 << (32 - shift_imm))) ? 1 : 0;
             }
             return operand;
         }
@@ -305,7 +306,7 @@ u32 arm_cpu::get_shift_operand(bool s)
             else if((r[rs] & 0xff) < 32)
             {
                 operand = (s32)r[rm] >> (r[rs] & 0xff);
-                if(s) cpsr.carry = r[rm] & (1 << ((r[rs] & 0xff) - 1)) ? 1 : 0;
+                if(s) cpsr.carry = (r[rm] & (1 << (32 - (r[rs] & 0xff)))) ? 1 : 0;
             }
             else
             {
@@ -328,7 +329,7 @@ u32 arm_cpu::get_shift_operand(bool s)
             else
             {
                 operand = (r[rm] >> shift_imm) | (r[rm] << (32 - shift_imm));
-                if(s) cpsr.carry = r[rm] & (1 << (shift_imm - 1)) ? 1 : 0;
+                if(s) cpsr.carry = (r[rm] & (1 << (32 - shift_imm))) ? 1 : 0;
             }
             return operand;
         }
@@ -347,7 +348,7 @@ u32 arm_cpu::get_shift_operand(bool s)
             else
             {
                 operand = (r[rm] >> (r[rs] & 0x1f)) | (r[rm] << (32 - (r[rs] & 0x1f)));
-                if(s) cpsr.carry = r[rm] & (1 << ((r[rs] & 0x1f) - 1)) ? 1 : 0;
+                if(s) cpsr.carry = (r[rm] & (1 << (32 - (r[rs] & 0xff)))) ? 1 : 0;
             }
             return operand;
         }

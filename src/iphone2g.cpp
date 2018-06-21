@@ -9,7 +9,7 @@ void iphone2g::init()
     memset(bootrom, 0, 0x08000000);
     nor = (u8*)malloc(0x00100000);
     memset(nor, 0, 0x00100000);
-    iboot = (u8*)malloc(0x00048000);
+    iboot = (u8*)malloc(0x00140000);
     memset(iboot, 0, 0x00048000);
     ram = (u8*)malloc(0x08000000);
     memset(ram, 0, 0x08000000);
@@ -94,7 +94,7 @@ void iphone2g::init_hle()
         
         u32 addr = 0x18000400;
 
-        if(data_length_padded < (0x00048000 - 0x400)) memcpy(bootrom, iboot + 0x400, data_length_padded);
+        if(data_length_padded < (0x00140000 - 0x400)) memcpy(bootrom, iboot + 0x400, data_length_padded);
 
         cpu->r[15] = 0;
         do_print = true;
@@ -210,7 +210,7 @@ u32 iphone2g_rw(void* dev, u32 addr)
         return device->ram[(addr+0) - 0x08000000] | (device->ram[(addr+1) - 0x08000000] << 8)
         | (device->ram[(addr+2) - 0x08000000] << 16) | (device->ram[(addr+3) - 0x08000000] << 24);
     }
-    else if(addr >= 0x18000000 && addr < 0x18048000)
+    else if(addr >= 0x18000000 && addr < 0x18140000)
     {
         return device->iboot[(addr+0) - 0x18000000] | (device->iboot[(addr+1) - 0x18000000] << 8)
         | (device->iboot[(addr+2) - 0x18000000] << 16) | (device->iboot[(addr+3) - 0x18000000] << 24);
@@ -243,6 +243,7 @@ u32 iphone2g_rw(void* dev, u32 addr)
         {
             u32 data = device->sha1.sha1_rw(addr & 0xfff);
             fprintf(device->reg_access_log, "Sha1 read %08x pc %08x\n", addr, device->cpu->r[15]);
+            return data;
         }
         else if(periph_addr >= 0x00100000 && periph_addr < 0x00101000)
         {
