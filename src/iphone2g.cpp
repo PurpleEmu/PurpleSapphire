@@ -169,30 +169,16 @@ void iphone2g::interrupt(int num, bool level)
         if(level) vics[0].raw_intr |= 1 << num;
         else vics[0].raw_intr &= ~(1 << num);
         vics[0].update();
-        switch(cpu->type)
-        {
-            case arm_type::arm11:
-            {
-                if(cpu->cp15.control_arm11.intr_vectored_mode_enable)
-                    cpu->r[15] = vics[0].vect_addr[num];
-                break;
-            }
-        }
+        if(cpu->cp15.control_arm11.intr_vectored_mode_enable)
+            cpu->r[15] = vics[0].vect_addr[num];
     }
     else
     {
         if(level) vics[1].raw_intr |= 1 << (num & 0x1f);
         else vics[1].raw_intr &= ~(1 << (num & 0x1f));
         vics[1].update();
-        switch(cpu->type)
-        {
-            case arm_type::arm11:
-            {
-                if(cpu->cp15.control_arm11.intr_vectored_mode_enable)
-                    cpu->r[15] = vics[0].daisy_vect_addr;
-                break;
-            }
-        }
+        if(cpu->cp15.control_arm11.intr_vectored_mode_enable)
+            cpu->r[15] = vics[0].daisy_vect_addr;
     }
 }
 #undef printf

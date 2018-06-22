@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "arm.h"
+#include "vic.h"
 
 struct iphone3gs
 {
@@ -15,12 +16,14 @@ struct iphone3gs
 
     FILE* reg_access_log;
 
+    vic vics[3];
+
     void init();
     void exit();
 
     void tick();
 
-    void interrupt(int num);
+    void interrupt(int num, bool level);
 };
 
 u32 iphone3gs_rw(void* dev, u32 addr);
