@@ -11,7 +11,6 @@ void cp15_t::init()
     aux_control_cortex_a8.whole = 0x00000002;
     coprocessor_access_control.whole = 0x00000000;
     l2_cache_aux_control.whole = 0x00000042;
-    peripheral_port_remap.whole = 0x38000012;
 
     do_print = true;
 }
