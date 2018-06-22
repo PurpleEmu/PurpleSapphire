@@ -111,6 +111,10 @@ int main(int ac, char** av)
 
             dev->init_hle();
         }
+        else
+        {
+            memcpy(dev->lowram, dev->bootrom, 0x10000);
+        }
 
         if(!bootromhle)
         {
@@ -122,7 +126,7 @@ int main(int ac, char** av)
         }
         else
         {
-            for(int i = 0; i < 500000; i++)
+            for(int i = 0; i < 300000; i++)
             {
                 cpu.run(1);
                 dev->tick();

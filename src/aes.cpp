@@ -5,6 +5,7 @@ void aes_t::init()
     key_length_op = 0;
     key_length.whole = 0;
     key_type.whole = 0;
+    status = 0;
     memset(key_uid, 0, 16); //fake having a uid key lol
 }
 
@@ -13,7 +14,7 @@ void aes_t::decrypt_encrypt()
     u32* mem = (u32*)malloc(in_size);
     for(int i = 0; i < (in_size >> 2); i++)
     {
-        mem[i] = rw(device, in_addr + i);
+        mem[i] = rw(device, in_addr + (i << 2));
     }
 
     switch(key_type.which_key)
@@ -40,14 +41,18 @@ void aes_t::decrypt_encrypt()
             }
             break;
         }
-        case aes_key_type::uid:
-        {
-            AES_set_decrypt_key(key_uid, 128, &actual_key);
-            break;
-        }
         case aes_key_type::gid:
         {
             printf("Uh-oh! Nobody has a GID key! ABORT\n");
+            FILE* encryptfp = fopen("gidkeyreplace.bin", "wb");
+            if(!encryptfp) fclose(encryptfp);
+            fwrite(mem, 1, in_size, encryptfp);
+            fclose(encryptfp);
+            return;
+        }
+        case aes_key_type::uid:
+        {
+            AES_set_decrypt_key(key_uid, 128, &actual_key);
             break;
         }
     }
@@ -69,7 +74,7 @@ void aes_t::decrypt_encrypt()
 
     for(int i = 0; i < (out_size >> 2); i++)
     {
-        ww(device, (out_addr + i) & 0x7fffffff, mem_writeback[i]);
+        ww(device, (out_addr + (i << 2)) & 0x7fffffff, mem_writeback[i]);
     }
 
     memset(key, 0, 0x20);

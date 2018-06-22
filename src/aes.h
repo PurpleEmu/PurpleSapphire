@@ -8,7 +8,7 @@ typedef void(*ww_func)(void*, u32, u32);
 
 enum aes_key_type
 {
-    custom = 0, uid, gid
+    custom = 0, gid, uid
 };
 
 enum aes_key_length

@@ -628,7 +628,18 @@ void arm_cpu::tick()
 {
     //TODO
     //makes logs shorter when doing hle
-    if(hle && (r[15] == 0x00012f5e))
+    u32 true_r15 = 0;
+    if(!cpsr.thumb)
+    {
+        true_r15 = r[15] - 4;
+        if(just_branched) true_r15 -= 4;
+    }
+    else
+    {
+        true_r15 = r[15] - 2;
+        if(just_branched) true_r15 -= 2;
+    }
+    if(hle && ((true_r15 == 0x18012f5e) || (true_r15 == 0x00012f5e)))
     {
         iphone2g* dev2g = nullptr;
         iphone3gs* dev3gs = nullptr;
@@ -1181,8 +1192,6 @@ void arm_cpu::tick()
         next_opcode = rw(r[15]);
         r[15] += 4;
         just_branched = false;
-        u32 true_r15 = r[15] - 4;
-        if(true_r15 != 0) true_r15 -= 4;
         printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR4:%08x\nR12:%08x\nCPSR:%08x\n", opcode, true_r15, r[14], r[13], r[0], r[1], r[2], r[4], r[12], cpsr.whole);
         bool condition = false;
         switch(opcode >> 28)
@@ -1761,9 +1770,10 @@ void arm_cpu::tick()
                                         int rm = opcode & 0xf;
                                         if(condition)
                                         {
-                                            r[15] = (r[rm] & 0xfffffffe);
-                                            if(rm == 15) r[15] += 8;
+                                            u32 real_rm = (rm == 15) ? true_r15 : r[rm];
+                                            r[15] = (real_rm & 0xfffffffe);
                                             cpsr.thumb = r[rm] & 1;
+                                            //if(cpsr.thumb) r[15] -= 2;
                                             just_branched = true;
                                         }
                                     }
@@ -1788,13 +1798,10 @@ void arm_cpu::tick()
                                     int rm = opcode & 0xf;
 
                                     u32 oldpc = r[15];
-                                    if(rm != 15)
-                                    {
-                                        r[15] = (r[rm] - 4) & 0xfffffffe;
-                                        just_branched = true;
-                                    }
+                                    r[15] = r[rm] & 0xfffffffe;
+                                    just_branched = true;
                                     cpsr.thumb = r[rm] & 1;
-                                    r[14] = oldpc + 4;
+                                    r[14] = oldpc - 4;
                                     break;
                                 }
                                 case 5:
@@ -3369,21 +3376,17 @@ void arm_cpu::tick()
             }
             }
         }
-
-        if(just_branched)
-        {
-            next_opcode = rw(r[15]);
-            r[15] += 4;
-            just_branched = false;
-        }
     }
     else
     {
+        bool old_just_branched = just_branched;
         opcode = next_opcode;
         next_opcode = rw(r[15]);
         if(r[15] & 2) next_opcode >>= 16;
         else next_opcode &= 0xffff;
+        r[15] += 2;
         u32 opcode_2 = 0;
+        just_branched = false;
         if((((opcode >> 13) & 7) == 7) && (type == arm_type::cortex_a8))
         {
             if((opcode >> 11) & 3)
@@ -3391,12 +3394,11 @@ void arm_cpu::tick()
                 opcode_2 = rw((r[15] + 2) & 0xfffffffc);
                 if((r[15] + 2) & 2) opcode_2 >>= 16;
                 else opcode_2 &= 0xffff;
-                printf("Opcode:%04x\nOpcode 2:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, opcode_2, r[15], r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
+                printf("Opcode:%04x\nOpcode 2:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR12:%08x\nCPSR:%08x\n", opcode, opcode_2, true_r15, r[14], r[13], r[0], r[1], r[2], r[12], cpsr.whole);
             }
-            else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR3:%08x\nR4:%08x\nR6:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[3], r[4], r[6], r[12], cpsr.whole);
+            else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR3:%08x\nR4:%08x\nR6:%08x\nR12:%08x\nCPSR:%08x\n", opcode, true_r15, r[14], r[13], r[0], r[1], r[2], r[3], r[4], r[6], r[12], cpsr.whole);
         }
-        else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR3:%08x\nR4:%08x\nR6:%08x\nR12:%08x\nCPSR:%08x\n", opcode, r[15], r[14], r[13], r[0], r[1], r[2], r[3], r[4], r[6], r[12], cpsr.whole);
-        just_branched = false;
+        else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR3:%08x\nR4:%08x\nR6:%08x\nR12:%08x\nCPSR:%08x\n", opcode, true_r15, r[14], r[13], r[0], r[1], r[2], r[3], r[4], r[6], r[12], cpsr.whole);
 
         switch((opcode >> 13) & 7)
         {
@@ -3651,7 +3653,7 @@ void arm_cpu::tick()
                     printf("Thumb LDR_3\n");
                     int rd = (opcode >> 8) & 7;
                     u32 imm = opcode & 0xff;
-                    u32 addr = ((r[15] + 4) & 0xfffffffc) + (imm << 2);
+                    u32 addr = (r[15] & 0xfffffffc) + (imm << 2);
                     u32 data = rw(addr & 0xfffffffc);
                     r[rd] = (data >> ((addr & 3) << 3)) | (data << (32 - ((addr & 3) << 3)));
                 }
@@ -3722,7 +3724,7 @@ void arm_cpu::tick()
                                 {
                                     cpsr.thumb = r[15] & 1;
                                     u32 oldpc = r[15];
-                                    r[15] = (r[15] + 4) &  0xfffffffe;
+                                    r[15] = r[15] & 0xfffffffe;
                                     just_branched = true;
                                 }
                                 just_branched = true;
@@ -4310,7 +4312,7 @@ void arm_cpu::tick()
                         {
                             u32 oldpc = r[15];
                             r[15] = (r[14] + (imm << 1)) & 0xfffffffc;
-                            r[14] = (oldpc + 2) | 1;
+                            r[14] = (oldpc - 2) | 1;
                             cpsr.thumb = false;
                             just_branched = true;
                             break;
@@ -4324,8 +4326,8 @@ void arm_cpu::tick()
                         case 3:
                         {
                             u32 oldpc = r[15];
-                            r[15] = (r[14] + (imm << 1)) + 2;
-                            r[14] = (oldpc + 2) | 1;
+                            r[15] = (r[14] + (imm << 1));
+                            r[14] = (oldpc - 2) | 1;
                             just_branched = true;
                             break;
                         }
@@ -4650,18 +4652,26 @@ void arm_cpu::tick()
                         break;
                     }
                 }
-                r[15] += 2;
             }
             break;
         }
         }
-        if(just_branched)
+    }
+    if(just_branched)
+    {
+        if(cpsr.thumb)
         {
             next_opcode = rw(r[15]);
             if(r[15] & 2) next_opcode >>= 16;
             else next_opcode &= 0xffff;
             r[15] += 2;
         }
+        else
+        {
+            next_opcode = rw(r[15]);
+            r[15] += 4;
+        }
+        just_branched = false;
     }
 }
 

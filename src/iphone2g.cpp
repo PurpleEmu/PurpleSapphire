@@ -5,16 +5,18 @@
 void iphone2g::init()
 {
     //TODO
-    bootrom = (u8*)malloc(0x08000000);
-    memset(bootrom, 0, 0x08000000);
+    bootrom = (u8*)malloc(0x10000);
+    memset(bootrom, 0, 0x10000);
     nor = (u8*)malloc(0x00100000);
     memset(nor, 0, 0x00100000);
     iboot = (u8*)malloc(0x00140000);
-    memset(iboot, 0, 0x00048000);
+    memset(iboot, 0, 0x00140000);
     ram = (u8*)malloc(0x08000000);
     memset(ram, 0, 0x08000000);
     sram = (u8*)malloc(0x00500000);
     memset(sram, 0, 0x00500000);
+    lowram = (u8*)malloc(0x08000000);
+    memset(lowram, 0, 0x08000000);
 
     vics[0].init();
     vics[1].init();
@@ -94,11 +96,15 @@ void iphone2g::init_hle()
         
         u32 addr = 0x18000400;
 
-        if(data_length_padded < (0x00140000 - 0x400)) memcpy(bootrom, iboot + 0x400, data_length_padded);
+        if(data_length_padded < (0x00140000 - 0x400))
+        {
+            memcpy(lowram, iboot + 0x400, data_length_padded);
+            memcpy(iboot, lowram, data_length_padded);
+        }
 
-        cpu->r[15] = 0;
-        do_print = true;
-        cpu->init_hle(true);
+        cpu->r[15] = 0x18000000;
+        do_print = false;
+        cpu->init_hle(false);
     }
     else if(magic == 0x496d6733) //IMG3
     {
@@ -124,7 +130,8 @@ void iphone2g::init_hle()
             //memcpy(tag.data, iboot + addr, tag.data_length);
             if(tag_magic == 0x44415441) //DATA
             {
-                cpu->r[15] = addr;
+                memcpy(lowram, iboot + (addr - 0x18000000), data_length);
+                cpu->r[15] = 0;
                 found_data_tag = true;
             }
             else addr += total_length - 12;
@@ -195,25 +202,31 @@ u32 iphone2g_rw(void* dev, u32 addr)
 {
     iphone2g* device = (iphone2g*) dev;
     addr &= 0xfffffffc;
-    if(((addr < 0x10000) && !device->hle) || (addr >= 0x20000000 && addr < 0x20010000))
+    if(addr < 0x08000000)
     {
-        return device->bootrom[(addr+0) & 0xffff] | (device->bootrom[(addr+1) & 0xffff] << 8)
-        | (device->bootrom[(addr+2) & 0xffff] << 16) | (device->bootrom[(addr+3) & 0xffff] << 24);
-    }
-    else if(device->hle && (addr < 0x08000000))
-    {
-         return device->bootrom[(addr+0) & 0x7ffffff] | (device->bootrom[(addr+1) & 0x7ffffff] << 8)
-        | (device->bootrom[(addr+2) & 0x7ffffff] << 16) | (device->bootrom[(addr+3) & 0x7ffffff] << 24);
+         return device->lowram[(addr+0) & 0x7ffffff] | (device->lowram[(addr+1) & 0x7ffffff] << 8)
+        | (device->lowram[(addr+2) & 0x7ffffff] << 16) | (device->lowram[(addr+3) & 0x7ffffff] << 24);
     }
     else if(addr >= 0x08000000 && addr < 0x10000000)
     {
-        return device->ram[(addr+0) - 0x08000000] | (device->ram[(addr+1) - 0x08000000] << 8)
+        u32 data = device->ram[(addr+0) - 0x08000000] | (device->ram[(addr+1) - 0x08000000] << 8)
         | (device->ram[(addr+2) - 0x08000000] << 16) | (device->ram[(addr+3) - 0x08000000] << 24);
+        //if(addr >= 0x0fff0000) printf("RAM read addr %08x data %08x\n", addr, data);
+        //if(addr == 0x0fffbf50)
+        //{
+        //    printf("WTF read addr %08x data %08x\n", addr, data);
+        //}
+        return data;
     }
     else if(addr >= 0x18000000 && addr < 0x18140000)
     {
         return device->iboot[(addr+0) - 0x18000000] | (device->iboot[(addr+1) - 0x18000000] << 8)
         | (device->iboot[(addr+2) - 0x18000000] << 16) | (device->iboot[(addr+3) - 0x18000000] << 24);
+    }
+    else if(addr >= 0x20000000 && addr < 0x20010000)
+    {
+        return device->bootrom[(addr+0) & 0xffff] | (device->bootrom[(addr+1) & 0xffff] << 8)
+        | (device->bootrom[(addr+2) & 0xffff] << 16) | (device->bootrom[(addr+3) & 0xffff] << 24);
     }
     else if(addr >= 0x22000000 && addr < 0x22500000)
     {
@@ -262,10 +275,6 @@ u32 iphone2g_rw(void* dev, u32 addr)
         }
         else if(periph_addr >= 0x00c00000 && periph_addr < 0x00c01000)
         {
-            if(device->cpu->r[15] == 0x20001fac)
-            {
-                printf("STOP FUCKING WITH ME\n");
-            }
             u32 data = device->aes.aes_rw(addr & 0xfff);
             fprintf(device->reg_access_log, "Aes read %08x data %08x pc %08x\n", addr, data, device->cpu->r[15]);
             return data;
@@ -354,28 +363,21 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
 {
     iphone2g* device = (iphone2g*) dev;
     addr &= 0xfffffffc;
-    if((addr < 0x08000000) && device->hle)
+    if(addr < 0x08000000)
     {
-        device->bootrom[(addr+0) & 0x7ffffff] = (data >> 0) & 0xff;
-        device->bootrom[(addr+1) & 0x7ffffff] = (data >> 8) & 0xff;
-        device->bootrom[(addr+2) & 0x7ffffff] = (data >> 16) & 0xff;
-        device->bootrom[(addr+3) & 0x7ffffff] = (data >> 24) & 0xff;
-    }
-    else if(addr >= 0x08000000 && addr < 0x10000000)
-    {
-        device->ram[(addr+0) & 0x7ffffff] = (data >> 0) & 0xff;
-        device->ram[(addr+1) & 0x7ffffff] = (data >> 8) & 0xff;
-        device->ram[(addr+2) & 0x7ffffff] = (data >> 16) & 0xff;
-        device->ram[(addr+3) & 0x7ffffff] = (data >> 24) & 0xff;
+        device->lowram[(addr+0) & 0x7ffffff] = (data >> 0) & 0xff;
+        device->lowram[(addr+1) & 0x7ffffff] = (data >> 8) & 0xff;
+        device->lowram[(addr+2) & 0x7ffffff] = (data >> 16) & 0xff;
+        device->lowram[(addr+3) & 0x7ffffff] = (data >> 24) & 0xff;
         if(addr >= 0x000447a0 && addr <= 0x00044b88)
         {
             printf("bufferPrint write %08x data %08x\n", addr, data);
             if(device->cpu->r[15] == 0x0001423e)
             {
-                char c1 = device->bootrom[addr];
-                char c2 = device->bootrom[addr + 1];
-                char c3 = device->bootrom[addr + 2];
-                char c4 = device->bootrom[addr + 3];
+                char c1 = device->lowram[addr];
+                char c2 = device->lowram[addr + 1];
+                char c3 = device->lowram[addr + 2];
+                char c4 = device->lowram[addr + 3];
                 fputc(c1, device->serial_buffer_log);
                 fputc(c2, device->serial_buffer_log);
                 fputc(c3, device->serial_buffer_log);
@@ -384,7 +386,18 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
             }
         }
     }
-    else if(addr >= 0x18000000 && addr < 0x18048000)
+    else if(addr >= 0x08000000 && addr < 0x10000000)
+    {
+        //if(addr == 0x0fffbf50)
+        //{
+        //    printf("WTF write addr %08x data %08x\n", addr, data);
+        //}
+        device->ram[(addr+0) & 0x7ffffff] = (data >> 0) & 0xff;
+        device->ram[(addr+1) & 0x7ffffff] = (data >> 8) & 0xff;
+        device->ram[(addr+2) & 0x7ffffff] = (data >> 16) & 0xff;
+        device->ram[(addr+3) & 0x7ffffff] = (data >> 24) & 0xff;
+    }
+    else if(addr >= 0x18000000 && addr < 0x18140000)
     {
         device->iboot[(addr+0) - 0x18000000] = (data >> 0) & 0xff;
         device->iboot[(addr+1) - 0x18000000] = (data >> 8) & 0xff;
