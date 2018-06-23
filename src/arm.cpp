@@ -2423,7 +2423,7 @@ void arm_cpu::tick()
             case 2:
             case 3:
             {
-                if(((opcode >> 4) & 1) && ((opcode >> 25) & 1))
+                if((((opcode >> 4) & 1) && ((opcode >> 25) & 1)) && (type >= arm11))
                 {
                     //printf("Unknown media!\n");
                     tick_media(opcode);
