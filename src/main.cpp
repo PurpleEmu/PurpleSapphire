@@ -1,3 +1,7 @@
+#ifdef __APPLE__
+#error "Apple is vehemently anti-dev, and refuses to support modern OpenGL, OpenCL, or any Vulkan natively. Therefore, this software does not support MacOS."
+#endif
+
 #include "common.h"
 #include "arm.h"
 #include "iphone2g.h"
