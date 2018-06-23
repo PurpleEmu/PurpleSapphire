@@ -13,7 +13,11 @@ enum class device_type
 };
 
 int main(int ac, char** av)
-{   
+{
+#ifdef __APPLE__
+    printf("Really? You were smart enough to disable the first check, but still stupid enough to use an Apple operating system? Fucking shame on you, I'm out.\n");
+    return -1;
+#endif
     if(ac < 5)
     {
         printf("usage: %s [device] <path_to_bootrom> <path_to_nor> <path_to_iboot>\n", av[0]);
