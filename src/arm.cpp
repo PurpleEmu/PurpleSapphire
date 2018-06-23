@@ -1568,7 +1568,7 @@ void arm_cpu::tick()
                         }
                         else
                         {
-                            if((opcode >> 7) & 1)
+                            if(((opcode >> 7) & 1) && (type >= arm_type::arm9))
                             {
                                 switch((opcode >> 21) & 3)
                                 {
@@ -1763,7 +1763,7 @@ void arm_cpu::tick()
                                 }
                                 case 1:
                                 {
-                                    if((opcode >> 22) & 1) printf("CLZ\n");
+                                    if(((opcode >> 22) & 1) && (type >= arm_type::arm9)) printf("CLZ\n");
                                     else
                                     {
                                         printf("BX\n");
@@ -1794,6 +1794,8 @@ void arm_cpu::tick()
                                 }
                                 case 3:
                                 {
+                                    if(type >= arm_type::arm9)
+                                    {
                                     printf("BLX_2\n");
                                     int rm = opcode & 0xf;
 
@@ -1802,10 +1804,13 @@ void arm_cpu::tick()
                                     just_branched = true;
                                     cpsr.thumb = r[rm] & 1;
                                     r[14] = oldpc - 4;
+                                    }
                                     break;
                                 }
                                 case 5:
                                 {
+                                    if(type >= arm_type::arm9)
+                                    {
                                     switch((opcode >> 21) & 3)
                                     {
                                     case 0:
@@ -1821,10 +1826,11 @@ void arm_cpu::tick()
                                         printf("QDSUB\n");
                                         break;
                                     }
+                                    }
                                     break;
                                 }
                                 case 7:
-                                    printf("BKPT\n");
+                                    if(type >= arm_type::arm9) printf("BKPT\n");
                                     break;
                                 }
                             }
@@ -3209,7 +3215,7 @@ void arm_cpu::tick()
                         else printf("CDP\n");
                     }
                 }
-                else
+                else if(type >= arm_type::arm9)
                 {
                     if((opcode >> 20) & 1) printf("MRRC\n");
                     else printf("MCRR\n");
@@ -3218,7 +3224,7 @@ void arm_cpu::tick()
             }
             }
         }
-        if((opcode >> 28) == 0xf)
+        if(((opcode >> 28) == 0xf) && (type >= arm_type::arm9))
         {
             switch((opcode >> 26) & 3)
             {
@@ -3700,7 +3706,7 @@ void arm_cpu::tick()
                         }
                         case 3:
                         {
-                            if((opcode >> 7) & 1)
+                            if(((opcode >> 7) & 1) && (type >= arm_type::arm9))
                             {
                                 printf("Thumb BLX_2\n");
                                 int rm = (opcode >> 3) & 7;

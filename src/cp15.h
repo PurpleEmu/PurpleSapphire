@@ -5,7 +5,7 @@
 
 enum class arm_type
 {
-    arm11, cortex_a8
+    arm7tdmi, arm9, arm11, cortex_a8
 };
 
 enum cp15_domain_access_permissions
