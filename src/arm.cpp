@@ -354,6 +354,7 @@ u32 arm_cpu::get_shift_operand(bool s)
         }
         }
     }
+    return 0; //Shuts up GCC.
 }
 
 void arm_cpu::tick_media(u32 opcode)
