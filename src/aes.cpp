@@ -48,11 +48,12 @@ void aes_t::decrypt_encrypt()
             FILE* encryptfp = fopen("gidkeyreplace.bin", "wb");
             if(!encryptfp)
             {
-                fclose(encryptfp);
+                free(mem);
                 return;
             }
             fwrite(mem, 1, in_size, encryptfp);
             fclose(encryptfp);
+            free(mem);
             return;
         }
         case aes_key_type::uid:

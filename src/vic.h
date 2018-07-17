@@ -23,8 +23,8 @@ struct vic
     u32 current_highest_intr;
 
     s32 stack_i;
-    u32 priority_stack[17];
-    u8 irq_stack[17];
+    u32 priority_stack[33];
+    u8 irq_stack[33];
     u32 priority;
 
     u32 daisy_vect_addr;
