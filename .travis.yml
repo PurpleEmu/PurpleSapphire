@@ -1,19 +1,6 @@
 language: cpp
-sudo: required
-dist: xenial
 compiler:
+- clang
 - gcc
-os:
-- linux
-script: make
-addons:
-  coverity_scan:
-    project:
-      name: MoochMcGee/PurpleSapphire
-      version: 1.0
-      description: My Project
-    notification_email: alegend45@gmail.com
-    build_command: make
-    branch_pattern: coverity_scan
-COVERITY_SCAN_TOKEN:
-  secure: H+G0hI06L3B1YGrQ3wbV7+hom+xMmYzqW7jnEuBdJ+yORz7EPWOR/veRH+2PDg2r3ZK66kd5h+I2TJSpWo6KqSipEN2VGED8/v38isxQEt0WNGw02ENis7c4pjZRQVZxK1/NPpaPbuOySB9LRM0yUt4/V1wlLdwifpfJNU5D5o4fWltOyswZsFZOtXfyi3OD8P6MYWmDydUtMWnlwEWcnGBDyo8Ltfwql2rQgrQ16PM4c8WfhzDA+OB3dcVZ97dxVxC1hcw2RfK2p2UHvrBzC4nzqJOenxALHojPwFFP6WnpDodsuQnod9yCpNQxPuDDkfeNGSgjfoeCSB9ud4W5xeeaxMrjdflA6y4FlaxGrWrmGaUggaW8t0FnNA9snrd3JxJw4J4+ntyG408qEzEdj2xw616hI3nk+4kVzHFdlX+RvrHc5hZCb1cPlnBjwUvZRj9H11K3haxQj7mn+DE+2p6COZd2ugFRO7nn2Umo2PTU8UU3pu/7I2Z9Pnn+vOTISXcag+uIHTPNwMhdwSEHLIJap/moqaJUXyepXvSz+I6QIJGTaSObF9uFlvQ142E8Reb6PGX7i9CNaEhBYGGqyIfXCiD9UPZE2HE0BWDf3B+BAo677JuMsL27A37Drmy5BHAPy3eNh6eSrnVWup4OsxZ3H640anQVasYh8QKsbQU=
+secure: "yBXcxb1YRO4t7StHRjwnrQabZNjFaqvkK/Lo7p9vXvnHuVBAoe278fRoiJV811uMw207EWOHhOSkCP7CNnvQYCfjN5QAvDUW6zKeEViyhK2ysHTGiRdssPx5J13JINZS9LcNxueUto7BZ4Yt47fExn7XVmdXUirT15t7x+9vT7ZxsaAzuYQsXjiAB85EMuTfxNklwdW9NGyvHEjBiY8cO68fDEN5GBKw+Okg9ERu++sTFZme/dMNiHvklBmRErIxGzODDELvPPPozNhw0u/0RjisTzpS+7y61YRvogfoiLVm6xcti5OMDDwIqjrLiP/ThmIjNXhKU03FRlK45QP1avJgvs2VPxT/lRw2Awj7HoKGwjyCBt7KKUDjEVXDKQEDl8WezrM8Z7srOZMgyl5away5m0b9p0k8vNukRl2ddj82OyU32M21jI63G2k25eGOEKL/jae9uWn4XVMb2ViP15ZL1v6APVbsYwVKspG0ede0o47QphDokQxJ/8lkSvLSmrWdfeS8LA3kjRyCf5yCbTwHizFl48pyG+GSkuUvHF4QqfEMLB87qfv6umjAzu1ACl+4YgGnJb2Mv8+bKXMUuI4wE67gI6Bx2/nTse7jDJDzPdQUgJ99fbXeTuWosF9q3VqsowCJM9w0j/irVAVSvqyUDljNXnuG2KhhI/t3GP8="
+
