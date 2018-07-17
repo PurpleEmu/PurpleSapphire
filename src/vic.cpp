@@ -1,5 +1,7 @@
 #include "vic.h"
 
+#define printf(...)
+
 void vic::init()
 {
     for(int i = 0; i < 32; i++)
@@ -134,10 +136,10 @@ void vic::update()
 
 void vic::mask_priority()
 {
-    if(stack_i >= 16)
+    if(stack_i >= 32)
     {
         printf("VIC has detected something seriously wrong\n");
-        exit(EXIT_FAILURE); /* something has gone horribly wrong and to save the world we must kill this for the greater good */
+        //exit(6); /* something has gone horribly wrong and to save the world we must kill this for the greater good */
     }
     stack_i++;
     if(current_intr == 32) priority = daisy_priority;
@@ -152,7 +154,7 @@ void vic::unmask_priority()
     if(stack_i < 1)
     {
         printf("VIC has detected something seriously wrong\n");
-        exit(EXIT_FAILURE); /* see above */
+        //exit(7); /* see above */
     }
     stack_i--;
     priority = priority_stack[stack_i];
@@ -219,12 +221,10 @@ void vic::ww(u32 addr, u32 data)
     if(addr >= 0x100 && addr < 0x180)
     {
         vect_addr[(addr & 0x7f) >> 2] = data;
-        update();
     }
     if(addr >= 0x200 && addr < 0x280)
     {
         vect_priority[(addr & 0x7f) >> 2] = data;
-        update();
     }
 
     switch(addr & 0xfff)

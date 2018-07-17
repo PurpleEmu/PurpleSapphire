@@ -1,6 +1,7 @@
 #include <openssl/sha.h>
 
 #include "sha1.h"
+#include "iphone2g.h"
 
 void sha1_t::init()
 {
@@ -46,6 +47,7 @@ u32 sha1_t::sha1_rw(u32 addr)
 
 void sha1_t::sha1_ww(u32 addr, u32 data)
 {
+    iphone2g* dev = (iphone2g*)device;
     switch(addr & 0xfff)
     {
         case 0x000:
@@ -55,6 +57,8 @@ void sha1_t::sha1_ww(u32 addr, u32 data)
                 //start sha1
                 if(!in_addr || !in_size) return;
                 hash();
+                dev->interrupt(0x28, true);
+                dev->interrupt(0x28, false);
             }
             config = data;
             break;

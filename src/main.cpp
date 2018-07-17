@@ -7,6 +7,8 @@
 #include "iphone2g.h"
 #include "iphone3gs.h"
 
+#define printf(...)
+
 enum class device_type
 {
     iphone2g, iphone3gs
@@ -126,7 +128,7 @@ int main(int ac, char** av)
 
         if(!bootromhle)
         {
-            for(int i = 0; i < 40000; i++)
+            for(int i = 0; i < 400000; i++)
             {
                 cpu.run(1);
                 dev->tick();

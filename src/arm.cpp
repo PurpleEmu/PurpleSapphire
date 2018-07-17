@@ -2,7 +2,7 @@
 #include "iphone2g.h"
 #include "iphone3gs.h"
 
-#define printf(...) do{ if(do_print) printf(__VA_ARGS__); } while(0)
+#define printf(...)
 
 void arm_cpu::init()
 {
@@ -126,8 +126,8 @@ u32 arm_cpu::get_load_store_addr()
     {
         if(w)
         {
-            if(u) r[rn] = r[rn] + offset;
-            else r[rn] = r[rn] - offset;
+            if(u) r[rn] += offset;
+            else r[rn] -= offset;
 
             addr = r[rn];
         }
@@ -139,8 +139,8 @@ u32 arm_cpu::get_load_store_addr()
         {
             addr = r[rn];
 
-            if(u) r[rn] = r[rn] + offset;
-            else r[rn] = r[rn] - offset;
+            if(u) r[rn] += offset;
+            else r[rn] -= offset;
         }
     }
 
@@ -1193,7 +1193,13 @@ void arm_cpu::tick()
         next_opcode = rw(r[15]);
         r[15] += 4;
         just_branched = false;
-        printf("Opcode:%08x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR4:%08x\nR12:%08x\nCPSR:%08x\n", opcode, true_r15, r[14], r[13], r[0], r[1], r[2], r[4], r[12], cpsr.whole);
+#undef printf
+        printf("Opcode:%08x\nPC:%08x\n", opcode, true_r15);
+        for(int i = 0; i < 15; i++)
+        {
+            printf("R%d:%08x\n", i, r[i]);
+        }
+#define printf(...)
         bool condition = false;
         switch(opcode >> 28)
         {
@@ -2216,7 +2222,7 @@ void arm_cpu::tick()
                             u64 result64 = (u64)r[rn] - shift_operand;
                             u32 result = (u32)result64;
 
-                            cpsr.carry = (s64)result64 < 0x100000000LL;
+                            cpsr.carry = ((r[rn] >> 31) & ~(shift_operand >> 31)) | ((r[rn] >> 31) & ~(result >> 31)) | (~(shift_operand >> 31) & ~(result >> 31));
                             cpsr.overflow = ((r[rn] ^ shift_operand) & (r[rn] ^ result) & 0x80000000) >> 31;
                             cpsr.sign = (result & 0x80000000) >> 31;
                             cpsr.zero = !result;
@@ -3405,8 +3411,13 @@ void arm_cpu::tick()
             }
             else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR3:%08x\nR4:%08x\nR6:%08x\nR12:%08x\nCPSR:%08x\n", opcode, true_r15, r[14], r[13], r[0], r[1], r[2], r[3], r[4], r[6], r[12], cpsr.whole);
         }
-        else printf("Opcode:%04x\nPC:%08x\nLR:%08x\nSP:%08x\nR0:%08x\nR1:%08x\nR2:%08x\nR3:%08x\nR4:%08x\nR6:%08x\nR12:%08x\nCPSR:%08x\n", opcode, true_r15, r[14], r[13], r[0], r[1], r[2], r[3], r[4], r[6], r[12], cpsr.whole);
-
+#undef printf
+        else printf("Opcode:%04x\nPC:%08x\n", opcode, true_r15);
+        for(int i = 0; i < 15; i++)
+        {
+            printf("R%d:%08x\n", i, r[i]);
+        }
+#define printf(...)
         switch((opcode >> 13) & 7)
         {
         case 0:

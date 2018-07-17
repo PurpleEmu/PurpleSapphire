@@ -1,3 +1,5 @@
+#pragma once
+
 #include "common.h"
 
 typedef u32(*rw_func)(void*, u32);

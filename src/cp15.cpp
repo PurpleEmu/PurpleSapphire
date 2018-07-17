@@ -1,11 +1,11 @@
 #include "arm.h"
 
-#define printf(...) do{ if(do_print) printf(__VA_ARGS__); } while(0)
+#define printf(...)
 
 void cp15_t::init()
 {
     //TODO
-    control_arm11.whole = 0x000500f8;
+    control_arm11.whole = 0x00050078;
     control_cortex_a8.whole = 0x08c50078;
     aux_control_arm11.whole = 0x00000007;
     aux_control_cortex_a8.whole = 0x00000002;

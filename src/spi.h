@@ -17,10 +17,12 @@ struct spi_t
     u32 idd;
 
     u8 interrupt;
+    u32 interrupt_count;
 
     void* device;
 
     void init();
+    void tick();
 
     u32 rw(u32 addr);
     void ww(u32 addr, u32 data);
