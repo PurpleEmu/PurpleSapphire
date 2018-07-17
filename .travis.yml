@@ -5,36 +5,21 @@ compiler:
 - gcc
 os:
 - linux
-
 script: make
-
 env:
   global:
-   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
-   #   via the "travis encrypt" command using the project repo's public key
-   - secure: "WatL+07mn1iM+YjACvP6lY7Ttwe7jGjBKljCESpHQgcREEOgNufq72uF7BFXRFtp57LBad+o9EuH5ZQqzkItyfz2gFM3nArgOQCNCaqxcmJeaYNdwUkFHC/JxZLInK+7CVpf4IbM8Q6KniZpqv84oUNsoQD+rrOCio9zpA70vGvnzyl9ou+wK2cinOaXWwkJbY4l+fdtz+5bjGj2fhS1HdDZwlB8UPPscamRU4IZcPhxiYXhaQ8P1+SYO/qf4YKctwNuxxHM4b9nBMDZKMY7Np8Dnb48Org/3RvM1prQtUQrjNJci3WBaH4mdPcXfa5cTTr93hcKjwyi63XYhNQYIMYFCPUfk06z4oi3zsPVq5FtrmbDygIBKcNshVOp9NPSrm4PktZ/oilQtZj6BQmFqox5Bo72jLHUWZRqYwyUkKc8OkAMl0wGN4UJjjkk+gHBd8iV0Byb866Qm6YWCjmVLdKbhdHn5Wnxhl+Lp0epBPQUwF3MNtw4OcM+5H4Kr1KXCDs7ZK5QK/rXbouKCHoL9GGIL1XBuq9JI6ZdBgu3Du3jccUnRs76vX62iN4x1MaKbeEihzd4cjeNzrNHsja3qNQ1Oi/PRaTnxEDLu651rffsl4Zd9nuii6lLLpwMnt0p/vRQ/+IbvibZGupnBcnv5VC2D6dt07PTur/eiar1qA8="
-
+  - secure: WatL+07mn1iM+YjACvP6lY7Ttwe7jGjBKljCESpHQgcREEOgNufq72uF7BFXRFtp57LBad+o9EuH5ZQqzkItyfz2gFM3nArgOQCNCaqxcmJeaYNdwUkFHC/JxZLInK+7CVpf4IbM8Q6KniZpqv84oUNsoQD+rrOCio9zpA70vGvnzyl9ou+wK2cinOaXWwkJbY4l+fdtz+5bjGj2fhS1HdDZwlB8UPPscamRU4IZcPhxiYXhaQ8P1+SYO/qf4YKctwNuxxHM4b9nBMDZKMY7Np8Dnb48Org/3RvM1prQtUQrjNJci3WBaH4mdPcXfa5cTTr93hcKjwyi63XYhNQYIMYFCPUfk06z4oi3zsPVq5FtrmbDygIBKcNshVOp9NPSrm4PktZ/oilQtZj6BQmFqox5Bo72jLHUWZRqYwyUkKc8OkAMl0wGN4UJjjkk+gHBd8iV0Byb866Qm6YWCjmVLdKbhdHn5Wnxhl+Lp0epBPQUwF3MNtw4OcM+5H4Kr1KXCDs7ZK5QK/rXbouKCHoL9GGIL1XBuq9JI6ZdBgu3Du3jccUnRs76vX62iN4x1MaKbeEihzd4cjeNzrNHsja3qNQ1Oi/PRaTnxEDLu651rffsl4Zd9nuii6lLLpwMnt0p/vRQ/+IbvibZGupnBcnv5VC2D6dt07PTur/eiar1qA8=
 before_install:
-  - echo -n | openssl s_client -connect https://scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
-
+- echo -n | openssl s_client -connect https://scan.coverity.com:443 | sed -ne '/-BEGIN
+  CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
 addons:
   coverity_scan:
-
-    # GitHub project metadata
-    # ** specific to your project **
     project:
       name: PurpleEmu/PurpleSapphire
       version: 1.0
       description: My Project
-
-    # Where email notification of build analysis results will be sent
     notification_email: alegend45@gmail.com
-
-    # The command that will be added as an argument to "cov-build" to compile your project for analysis,
-    # ** likely specific to your build **
     build_command: make
-
-    # Pattern to match selecting branches that will run analysis. We recommend leaving this set to 'coverity_scan'.
-    # Take care in resource usage, and consider the build frequency allowances per
-    #   https://scan.coverity.com/faq#frequency
     branch_pattern: coverity_scan
+COVERITY_SCAN_TOKEN:
+  secure: H+G0hI06L3B1YGrQ3wbV7+hom+xMmYzqW7jnEuBdJ+yORz7EPWOR/veRH+2PDg2r3ZK66kd5h+I2TJSpWo6KqSipEN2VGED8/v38isxQEt0WNGw02ENis7c4pjZRQVZxK1/NPpaPbuOySB9LRM0yUt4/V1wlLdwifpfJNU5D5o4fWltOyswZsFZOtXfyi3OD8P6MYWmDydUtMWnlwEWcnGBDyo8Ltfwql2rQgrQ16PM4c8WfhzDA+OB3dcVZ97dxVxC1hcw2RfK2p2UHvrBzC4nzqJOenxALHojPwFFP6WnpDodsuQnod9yCpNQxPuDDkfeNGSgjfoeCSB9ud4W5xeeaxMrjdflA6y4FlaxGrWrmGaUggaW8t0FnNA9snrd3JxJw4J4+ntyG408qEzEdj2xw616hI3nk+4kVzHFdlX+RvrHc5hZCb1cPlnBjwUvZRj9H11K3haxQj7mn+DE+2p6COZd2ugFRO7nn2Umo2PTU8UU3pu/7I2Z9Pnn+vOTISXcag+uIHTPNwMhdwSEHLIJap/moqaJUXyepXvSz+I6QIJGTaSObF9uFlvQ142E8Reb6PGX7i9CNaEhBYGGqyIfXCiD9UPZE2HE0BWDf3B+BAo677JuMsL27A37Drmy5BHAPy3eNh6eSrnVWup4OsxZ3H640anQVasYh8QKsbQU=
