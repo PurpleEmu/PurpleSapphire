@@ -1,4 +1,5 @@
 #include "aes.h"
+#include "iphone2g.h"
 
 void aes_t::init()
 {
@@ -45,7 +46,11 @@ void aes_t::decrypt_encrypt()
         {
             printf("Uh-oh! Nobody has a GID key! ABORT\n");
             FILE* encryptfp = fopen("gidkeyreplace.bin", "wb");
-            if(!encryptfp) fclose(encryptfp);
+            if(!encryptfp)
+            {
+                fclose(encryptfp);
+                return;
+            }
             fwrite(mem, 1, in_size, encryptfp);
             fclose(encryptfp);
             return;
@@ -103,15 +108,18 @@ u32 aes_t::aes_rw(u32 addr)
 
 void aes_t::aes_ww(u32 addr, u32 data)
 {
+    iphone2g* dev = (iphone2g*)device;
     u32 aes_addr = addr & 0xfff;
-    if(aes_addr >= 0x4c && aes_addr < 0x6c) key[(addr - 0x4c) >> 2] |= data;
-    else if(aes_addr >= 0x74 && aes_addr < 0x84) iv[(addr - 0x74) >> 2] |= data;
+    if(aes_addr >= 0x4c && aes_addr < 0x6c) key[(addr - 0x4c) >> 2] = data;
+    else if(aes_addr >= 0x74 && aes_addr < 0x84) iv[(addr - 0x74) >> 2] = data;
     else switch(aes_addr)
     {
         case 0x000: control = data; break;
         case 0x004:
         {
             decrypt_encrypt();
+            dev->interrupt(0x27, true);
+            dev->interrupt(0x27, false);
             break;
         }
         case 0x008: unk_reg_0 = data; break;
