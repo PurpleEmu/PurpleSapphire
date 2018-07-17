@@ -1,5 +1,5 @@
 CXX=g++
-CFLAGS=-std=c++14 -g
+CFLAGS=--std=c++14 -g
 LIBS=-lcrypto
 VPATH=src
 OBJ = aes.o \
