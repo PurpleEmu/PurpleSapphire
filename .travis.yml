@@ -9,7 +9,7 @@ script: make
 addons:
   coverity_scan:
     project:
-      name: PurpleEmu/PurpleSapphire
+      name: MoochMcGee/PurpleSapphire
       version: 1.0
       description: My Project
     notification_email: alegend45@gmail.com
