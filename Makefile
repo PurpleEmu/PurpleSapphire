@@ -9,7 +9,6 @@ cp15.o \
 dmac.o \
 gpio.o \
 iphone2g.o \
-iphone3gs.o \
 main.o \
 power.o \
 sha1.o \

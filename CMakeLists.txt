@@ -27,8 +27,6 @@ src/gpio.cpp
 src/gpio.h
 src/iphone2g.cpp
 src/iphone2g.h
-src/iphone3gs.cpp
-src/iphone3gs.h
 src/main.cpp
 src/power.cpp
 src/power.h
