@@ -5,7 +5,6 @@ VPATH=src
 OBJ = aes.o \
 arm.o \
 clock.o \
-cp15.o \
 dmac.o \
 gpio.o \
 iphone2g.o \

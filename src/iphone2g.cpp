@@ -69,76 +69,10 @@ void iphone2g::init()
     usb_otg.device = this;
     usb_otg.init();
 
-    cpu->cp15.peripheral_port_remap.whole = 0x38000012;
+    //cpu->cp15.peripheral_port_remap.whole = 0x38000012;
     hle = false;
     do_print = true;
     reg_access_log = fopen("reglog.txt","w+");
-}
-
-void iphone2g::init_hle()
-{
-    hle = true;
-    wdt.init_hle();
-
-    u32 magic = iphone2g_rw(this, 0x18000000);
-    if(magic == 0x496D6732) //IMG2
-    {
-        printf("iBoot is in IMG2 format\n");
-        u32 image_type = iphone2g_rw(this, 0x18000004);
-        u16 security_epoch = iphone2g_rw(this, 0x18000008) >> 16;
-        u32 flags1 = iphone2g_rw(this, 0x1800000c);
-        u32 data_length_padded = iphone2g_rw(this, 0x18000010);
-        u32 data_length = iphone2g_rw(this, 0x18000014);
-        u32 index = iphone2g_rw(this, 0x18000018);
-        u32 flags2 = iphone2g_rw(this, 0x1800001c);
-        
-        u32 addr = 0x18000400;
-
-        if(data_length_padded < (0x00140000 - 0x400))
-        {
-            memcpy(lowram, iboot + 0x400, data_length_padded);
-            memcpy(iboot, lowram, data_length_padded);
-        }
-
-        cpu->r[15] = 0x18000000;
-        do_print = false;
-        cpu->init_hle(false);
-    }
-    else if(magic == 0x496d6733) //IMG3
-    {
-        printf("iBoot is in IMG3 format\n");
-        u32 full_size = iphone2g_rw(this, 0x18000004);
-        u32 size_no_pack = iphone2g_rw(this, 0x18000008);
-        u32 sig_check_area = iphone2g_rw(this, 0x1800000c);
-        u32 ident = iphone2g_rw(this, 0x18000010);
-
-        u32 addr = 0x18000014;
-
-        bool found_data_tag = false;
-
-        while(!found_data_tag)
-        {
-            u32 tag_magic = iphone2g_rw(this, addr);
-            addr += 4;
-            u32 total_length = iphone2g_rw(this, addr);
-            addr += 4;
-            u32 data_length = iphone2g_rw(this, addr);
-            addr += 4;
-            //tag.data = (u8*)malloc(tag.data_length);
-            //memcpy(tag.data, iboot + addr, tag.data_length);
-            if(tag_magic == 0x44415441) //DATA
-            {
-                memcpy(lowram, iboot + (addr - 0x18000000), data_length);
-                cpu->r[15] = 0;
-                found_data_tag = true;
-            }
-            else addr += total_length - 12;
-        }
-        do_print = false;
-        cpu->init_hle(false);
-    }
-
-    serial_buffer_log = fopen("ibootlog.txt","w+");
 }
 
 void iphone2g::exit()
@@ -170,22 +104,22 @@ void iphone2g::interrupt(int num, bool level)
         if(level) vics[0].raw_intr |= 1 << num;
         else vics[0].raw_intr &= ~(1 << num);
         vics[0].update();
-        if(!cpu->cp15.control_arm11.intr_vectored_mode_enable && level)
+        /*if(!cpu->cp15.control_arm11.intr_vectored_mode_enable && level)
         {
             cpu->r[15] = vics[0].vect_addr[num] + 4;
             cpu->just_branched = true;
-        }
+        }*/
     }
     else
     {
         if(level) vics[1].raw_intr |= 1 << (num & 0x1f);
         else vics[1].raw_intr &= ~(1 << (num & 0x1f));
         vics[1].update();
-        if(!cpu->cp15.control_arm11.intr_vectored_mode_enable && level)
+        /*if(!cpu->cp15.control_arm11.intr_vectored_mode_enable && level)
         {
             cpu->r[15] = vics[0].daisy_vect_addr + 4;
             cpu->just_branched = true;
-        }
+        }*/
     }
 }
 #define printf(...)
@@ -242,10 +176,11 @@ u32 iphone2g_rw(void* dev, u32 addr)
         return device->nor[(addr+0) & 0xfffff] | (device->nor[(addr+1) & 0xfffff] << 8)
         | (device->nor[(addr+2) & 0xfffff] << 16) | (device->nor[(addr+3) & 0xfffff] << 24);
     }
-    else if(addr >= (device->cpu->cp15.peripheral_port_remap.base_addr << 12)
-    && addr < ((device->cpu->cp15.peripheral_port_remap.base_addr << 12) + device->cpu->cp15.decode_peripheral_port_size()))
+    //else if(addr >= (device->cpu->cp15.peripheral_port_remap.base_addr << 12)
+    //&& addr < ((device->cpu->cp15.peripheral_port_remap.base_addr << 12) + device->cpu->cp15.decode_peripheral_port_size()))
+    else if(addr >= 0x38000000 && addr < 0x40000000)
     {
-        u32 periph_addr = addr - (device->cpu->cp15.peripheral_port_remap.base_addr << 12);
+        u32 periph_addr = addr - 0x38000000;//(device->cpu->cp15.peripheral_port_remap.base_addr << 12);
         /*if(periph_addr < 0x1000)
         {
             u32 data = device->sha1.sha1_rw(addr & 0xfff);
@@ -342,7 +277,7 @@ u32 iphone2g_rw(void* dev, u32 addr)
             fprintf(device->reg_access_log, "GPIO read %08x pc %08x\n", addr, device->cpu->r[15]);
             return device->gpio.rw(addr & 0xfff);
         }*/
-        else fprintf(device->reg_access_log, "Unknown peripheral port address %08x; peripheral port at %08x pc %08x\n", addr, (device->cpu->cp15.peripheral_port_remap.base_addr << 12), device->cpu->r[15]);
+        else fprintf(device->reg_access_log, "Unknown peripheral port address %08x; pc %08x\n", addr, device->cpu->r[15]);
     }
     else if(addr >= 0x88000000 && addr < 0x90000000)
     {
@@ -391,13 +326,6 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
         device->ram[(addr+2) & 0x7ffffff] = (data >> 16) & 0xff;
         device->ram[(addr+3) & 0x7ffffff] = (data >> 24) & 0xff;
     }
-    else if(addr >= 0x18000000 && addr < 0x18140000)
-    {
-        device->iboot[(addr+0) - 0x18000000] = (data >> 0) & 0xff;
-        device->iboot[(addr+1) - 0x18000000] = (data >> 8) & 0xff;
-        device->iboot[(addr+2) - 0x18000000] = (data >> 16) & 0xff;
-        device->iboot[(addr+3) - 0x18000000] = (data >> 24) & 0xff;
-    }
     else if(addr >= 0x22000000 && addr < 0x22500000)
     {
         //printf("SRAM write %08x data %08x\n", addr, data);
@@ -406,10 +334,11 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
         device->sram[(addr+2) - 0x22000000] = (data >> 16) & 0xff;
         device->sram[(addr+3) - 0x22000000] = (data >> 24) & 0xff;
     }
-    else if(addr >= (device->cpu->cp15.peripheral_port_remap.base_addr << 12)
-    && addr < ((device->cpu->cp15.peripheral_port_remap.base_addr << 12) + device->cpu->cp15.decode_peripheral_port_size()))
+    //else if(addr >= (device->cpu->cp15.peripheral_port_remap.base_addr << 12)
+    //&& addr < ((device->cpu->cp15.peripheral_port_remap.base_addr << 12) + device->cpu->cp15.decode_peripheral_port_size()))
+    else if(addr >= 0x38000000 && addr < 0x40000000)
     {
-        u32 periph_addr = addr - (device->cpu->cp15.peripheral_port_remap.base_addr << 12);
+        u32 periph_addr = addr - 0x38000000;//(device->cpu->cp15.peripheral_port_remap.base_addr << 12);
         if(periph_addr < 0x1000)
         {
             fprintf(device->reg_access_log, "Sha1 write %08x data %08x pc %08x\n", addr, data, device->cpu->r[15]);
@@ -505,7 +434,7 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
             fprintf(device->reg_access_log, "GPIO write %08x data %08x pc %08x\n", addr, data, device->cpu->r[15]);
             device->gpio.ww(addr & 0xfff, data);
         }
-        else fprintf(device->reg_access_log, "Unknown peripheral port address %08x data %08x; peripheral port at %08x pc %08x\n", addr, data, (device->cpu->cp15.peripheral_port_remap.base_addr << 12), device->cpu->r[15]);
+        else fprintf(device->reg_access_log, "Unknown peripheral port address %08x data %08x; pc %08x\n", addr, data, device->cpu->r[15]);
     }
     else if(addr >= 0x80000000 && addr < 0x88000000)
     {

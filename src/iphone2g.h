@@ -47,7 +47,6 @@ struct iphone2g
     usb_otg_t usb_otg;
 
     void init();
-    void init_hle();
     void exit();
 
     void tick();

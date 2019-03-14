@@ -1,7 +1,3 @@
-#ifdef __APPLE__
-#error "Apple is vehemently anti-dev, and refuses to support modern OpenGL, OpenCL, or any Vulkan natively. Therefore, this software does not support MacOS or Apple."
-#endif
-
 #include "common.h"
 #include "arm.h"
 #include "iphone2g.h"
@@ -18,13 +14,9 @@ enum class emu_mode_t
 
 int main(int ac, char** av)
 {
-#ifdef __APPLE__
-    printf("Really? You were smart enough to disable the first check, but still stupid enough to use an Apple operating system? Fucking shame on you, I'm out.\n");
-    return -1;
-#endif
-    if(ac < 6)
+    if(ac < 4)
     {
-        printf("usage: %s [device] [emulation_mode] <path_to_bootrom> <path_to_nor> <path_to_iboot>\n", av[0]);
+        printf("usage: %s [device] [emulation_mode] <path_to_bootrom>\n", av[0]);
         printf("device can be \"iphone2g\". No other devices are supported at this time.\n");
         printf("emulation_mode can be \"full_lle\", \"load_iboot\", or \"load_kernel\".\n");
         return 1;
@@ -62,8 +54,6 @@ int main(int ac, char** av)
         iphone2g* dev = (iphone2g*)malloc(sizeof(iphone2g));
         arm_cpu cpu;
 
-        cpu.type = arm_type::arm11;
-
         cpu.init();
 
         dev->cpu = &cpu;
@@ -87,51 +77,10 @@ int main(int ac, char** av)
             return 6;
         }
         fclose(fp);
+        
+        memcpy(dev->lowram, dev->bootrom, 0x10000);
 
-        fp = fopen(av[4],"rb");
-        if(!fp)
-        {
-            printf("unable to open %s, are you sure it exists?\n", av[3]);
-            return 5;
-        }
-        if(fread(dev->nor, 1, 0x100000, fp) != 0x100000)
-        {
-            fclose(fp);
-            return 6;
-        }
-        fclose(fp);
-
-        if(emu_mode == emu_mode_t::load_iboot)
-        {
-            fp = fopen(av[5],"rb");
-            if(!fp)
-            {
-                printf("unable to open %s, are you sure it exists?\n", av[3]);
-                return 5;
-            }
-            fseek(fp, 0, SEEK_END);
-            s64 filesize = ftell(fp);
-            fseek(fp, 0, SEEK_SET);
-            if(filesize == -1)
-            {
-                fclose(fp);
-                return 7;
-            }
-            if(fread(dev->iboot, 1, filesize, fp) != filesize)
-            {
-                fclose(fp);
-                return 6;
-            }
-            fclose(fp);
-
-            dev->init_hle();
-        }
-        else
-        {
-            memcpy(dev->lowram, dev->bootrom, 0x10000);
-        }
-
-        for(int i = 0; i < 300000; i++)
+        for(int i = 0; i < 100; i++)
         {
             cpu.run(1);
             dev->tick();
