@@ -54,6 +54,8 @@ int main(int ac, char** av)
         iphone2g* dev = (iphone2g*)malloc(sizeof(iphone2g));
         arm_cpu cpu;
 
+        cpu.type = arm_type::arm1176jzf_s;
+
         cpu.init();
 
         dev->cpu = &cpu;

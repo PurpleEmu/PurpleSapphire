@@ -2,6 +2,11 @@
 
 #include "common.h"
 
+enum arm_type
+{
+    arm7tdmi, arm9, arm1176jzf_s
+};
+
 enum arm_mode
 {
     mode_user = 0x10,
@@ -16,6 +21,8 @@ enum arm_mode
 
 struct arm_cpu
 {
+    arm_type type;
+
     u32 r[16];
 
     bool hle;
@@ -50,12 +57,12 @@ struct arm_cpu
         };
         u32 whole;
     } cpsr, spsr_fiq, spsr_irq, spsr_svc, spsr_abt, spsr_und, spsr_mon;
-    
-    u32 r8_fiq, r9_fiq, r10_fiq, r11_fiq, r12_fiq, r13_fiq, r14_fiq;
-    u32 r13_svc, r14_svc;
-    u32 r13_abt, r14_abt;
-    u32 r13_irq, r14_irq;
-    u32 r13_und, r14_und;
+
+    u32 r_fiq[7];
+    u32 r_svc[2];
+    u32 r_abt[2];
+    u32 r_irq[2];
+    u32 r_und[2];
 
     bool fiq, irq, fiq_enable, irq_enable;
     bool data_abort, abort_enable;
@@ -71,6 +78,9 @@ struct arm_cpu
 
     u32 rw(u32 addr);
     void ww(u32 addr, u32 data);
+
+    u32 get_register(int reg);
+    void set_register(int reg, u32 data);
 
     void tick();
     void run(int insns);

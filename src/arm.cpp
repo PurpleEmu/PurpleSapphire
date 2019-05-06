@@ -7,6 +7,19 @@ void arm_cpu::init()
         r[i] = 0;
     }
 
+    for(int i = 0; i < 7; i++)
+    {
+        r_fiq[i] = 0;
+    }
+
+    for(int i = 0; i < 2; i++)
+    {
+        r_abt[i] = 0;
+        r_irq[i] = 0;
+        r_svc[i] = 0;
+        r_und[i] = 0;
+    }
+
     cpsr.whole = 0x400001d3;
 
     fiq = false;
@@ -43,6 +56,57 @@ enum class arm_cond : u8
     greater = 0xc, lesserorequal = 0xd, always = 0xe, never = 0xf
 };
 
+u32 arm_cpu::get_register(int reg)
+{
+    if((reg < 8) || (reg == 15)) return r[reg];
+    switch(cpsr.mode)
+    {
+        case arm_mode::mode_user:
+        case arm_mode::mode_system: return r[reg];
+        case arm_mode::mode_fiq: return r_fiq[reg - 8];
+        default:
+        {
+            if(reg < 13) return r[reg];
+            else
+            {
+                switch(cpsr.mode)
+                {
+                    case arm_mode::mode_irq: return r_irq[reg - 13];
+                    case arm_mode::mode_supervisor: return r_svc[reg - 13];
+                    case arm_mode::mode_abort: return r_abt[reg - 13];
+                    case arm_mode::mode_undefined: return r_und[reg - 13];
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+void arm_cpu::set_register(int reg, u32 data)
+{
+    if((reg < 8) || (reg == 15)) r[reg] = data;
+    else switch(cpsr.mode)
+    {
+        case arm_mode::mode_user:
+        case arm_mode::mode_system: r[reg] = data; break;
+        case arm_mode::mode_fiq: r_fiq[reg - 8] = data; break;
+        default:
+        {
+            if(reg < 13) r[reg] = data;
+            else
+            {
+                switch(cpsr.mode)
+                {
+                    case arm_mode::mode_irq: r_irq[reg - 13] = data; break;
+                    case arm_mode::mode_supervisor: r_svc[reg - 13] = data; break;
+                    case arm_mode::mode_abort: r_abt[reg - 13] = data; break;
+                    case arm_mode::mode_undefined: r_und[reg - 13] = data; break;
+                }
+            }
+        }
+    }
+}
+
 void arm_cpu::tick()
 {
     u32 true_r15 = 0;
@@ -62,88 +126,6 @@ void arm_cpu::tick()
         arm_mode old_mode = cpsr.mode;
 
         cpsr.mode = mode_undefined;
-
-        u32 saved_reg[15];
-
-        switch(old_mode)
-        {
-        case mode_user:
-        case mode_system:
-        {
-            for(int i = 0; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        case mode_fiq:
-        {
-            for(int i = 8; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        case mode_irq:
-        case mode_supervisor:
-        case mode_abort:
-        case mode_undefined:
-        {
-            for(int i = 13; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        }
-
-        switch(cpsr.mode)
-        {
-        case mode_user:
-        case mode_system:
-        {
-            for(int i = 0; i < 15; i++)
-            {
-                r[i] = saved_reg[i];
-            }
-            break;
-        }
-        case mode_fiq:
-        {
-            r8_fiq = saved_reg[8];
-            r9_fiq = saved_reg[9];
-            r10_fiq = saved_reg[10];
-            r11_fiq = saved_reg[11];
-            r12_fiq = saved_reg[12];
-            r13_fiq = saved_reg[13];
-            r14_fiq = saved_reg[14];
-            break;
-        }
-        case mode_irq:
-        {
-            r13_irq = saved_reg[13];
-            r14_irq = saved_reg[14];
-            break;
-        }
-        case mode_supervisor:
-        {
-            r13_svc = saved_reg[13];
-            r14_svc = saved_reg[14];
-            break;
-        }
-        case mode_abort:
-        {
-            r13_abt = saved_reg[13];
-            r14_abt = saved_reg[14];
-            break;
-        }
-        case mode_undefined:
-        {
-            r13_und = saved_reg[13];
-            r14_und = saved_reg[14];
-            break;
-        }
-        }
         
         r[15] = 0x00;
 
@@ -163,89 +145,8 @@ void arm_cpu::tick()
         arm_mode old_mode = cpsr.mode;
 
         cpsr.mode = mode_abort;
-
-        u32 saved_reg[15];
-
-        switch(old_mode)
-        {
-        case mode_user:
-        case mode_system:
-        {
-            for(int i = 0; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        case mode_fiq:
-        {
-            for(int i = 8; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        case mode_irq:
-        case mode_supervisor:
-        case mode_abort:
-        case mode_undefined:
-        {
-            for(int i = 13; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        }
-
-        switch(cpsr.mode)
-        {
-        case mode_user:
-        case mode_system:
-        {
-            for(int i = 0; i < 15; i++)
-            {
-                r[i] = saved_reg[i];
-            }
-            break;
-        }
-        case mode_fiq:
-        {
-            r8_fiq = saved_reg[8];
-            r9_fiq = saved_reg[9];
-            r10_fiq = saved_reg[10];
-            r11_fiq = saved_reg[11];
-            r12_fiq = saved_reg[12];
-            r13_fiq = saved_reg[13];
-            r14_fiq = saved_reg[14];
-            break;
-        }
-        case mode_irq:
-        {
-            r13_irq = saved_reg[13];
-            r14_irq = saved_reg[14];
-            break;
-        }
-        case mode_supervisor:
-        {
-            r13_svc = saved_reg[13];
-            r14_svc = saved_reg[14];
-            break;
-        }
-        case mode_abort:
-        {
-            r13_abt = saved_reg[13];
-            r14_abt = saved_reg[14];
-            break;
-        }
-        case mode_undefined:
-        {
-            r13_und = saved_reg[13];
-            r14_und = saved_reg[14];
-            break;
-        }
-        }
-        r[14] = r[15] + 8;
+        
+        set_register(14, r[15] + 8);
         r[15] = 0x10;
         cpsr.thumb = false;
         cpsr.abort_disable = true;
@@ -257,88 +158,7 @@ void arm_cpu::tick()
 
         cpsr.mode = mode_fiq;
 
-        u32 saved_reg[15];
-
-        switch(old_mode)
-        {
-        case mode_user:
-        case mode_system:
-        {
-            for(int i = 0; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        case mode_fiq:
-        {
-            for(int i = 8; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        case mode_irq:
-        case mode_supervisor:
-        case mode_abort:
-        case mode_undefined:
-        {
-            for(int i = 13; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        }
-
-        switch(cpsr.mode)
-        {
-        case mode_user:
-        case mode_system:
-        {
-            for(int i = 0; i < 15; i++)
-            {
-                r[i] = saved_reg[i];
-            }
-            break;
-        }
-        case mode_fiq:
-        {
-            r8_fiq = saved_reg[8];
-            r9_fiq = saved_reg[9];
-            r10_fiq = saved_reg[10];
-            r11_fiq = saved_reg[11];
-            r12_fiq = saved_reg[12];
-            r13_fiq = saved_reg[13];
-            r14_fiq = saved_reg[14];
-            break;
-        }
-        case mode_irq:
-        {
-            r13_irq = saved_reg[13];
-            r14_irq = saved_reg[14];
-            break;
-        }
-        case mode_supervisor:
-        {
-            r13_svc = saved_reg[13];
-            r14_svc = saved_reg[14];
-            break;
-        }
-        case mode_abort:
-        {
-            r13_abt = saved_reg[13];
-            r14_abt = saved_reg[14];
-            break;
-        }
-        case mode_undefined:
-        {
-            r13_und = saved_reg[13];
-            r14_und = saved_reg[14];
-            break;
-        }
-        }
-        r[14] = r[15] + 4;
+        set_register(14, r[15] + 4);
         r[15] = 0x1c;
         cpsr.fiq_disable = true;
         fiq_enable = false;
@@ -350,88 +170,7 @@ void arm_cpu::tick()
 
         cpsr.mode = mode_irq;
 
-        u32 saved_reg[15];
-
-        switch(old_mode)
-        {
-        case mode_user:
-        case mode_system:
-        {
-            for(int i = 0; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        case mode_fiq:
-        {
-            for(int i = 8; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        case mode_irq:
-        case mode_supervisor:
-        case mode_abort:
-        case mode_undefined:
-        {
-            for(int i = 13; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        }
-
-        switch(cpsr.mode)
-        {
-        case mode_user:
-        case mode_system:
-        {
-            for(int i = 0; i < 15; i++)
-            {
-                r[i] = saved_reg[i];
-            }
-            break;
-        }
-        case mode_fiq:
-        {
-            r8_fiq = saved_reg[8];
-            r9_fiq = saved_reg[9];
-            r10_fiq = saved_reg[10];
-            r11_fiq = saved_reg[11];
-            r12_fiq = saved_reg[12];
-            r13_fiq = saved_reg[13];
-            r14_fiq = saved_reg[14];
-            break;
-        }
-        case mode_irq:
-        {
-            r13_irq = saved_reg[13];
-            r14_irq = saved_reg[14];
-            break;
-        }
-        case mode_supervisor:
-        {
-            r13_svc = saved_reg[13];
-            r14_svc = saved_reg[14];
-            break;
-        }
-        case mode_abort:
-        {
-            r13_abt = saved_reg[13];
-            r14_abt = saved_reg[14];
-            break;
-        }
-        case mode_undefined:
-        {
-            r13_und = saved_reg[13];
-            r14_und = saved_reg[14];
-            break;
-        }
-        }
-        r[14] = r[15] + 4;
+        set_register(14, r[15] + 4);
         r[15] = 0x18;
         cpsr.irq_disable = true;
         irq_enable = false;
@@ -444,88 +183,7 @@ void arm_cpu::tick()
 
         cpsr.mode = mode_undefined;
 
-        u32 saved_reg[15];
-
-        switch(old_mode)
-        {
-        case mode_user:
-        case mode_system:
-        {
-            for(int i = 0; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        case mode_fiq:
-        {
-            for(int i = 8; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        case mode_irq:
-        case mode_supervisor:
-        case mode_abort:
-        case mode_undefined:
-        {
-            for(int i = 13; i < 15; i++)
-            {
-                saved_reg[i] = r[i];
-            }
-            break;
-        }
-        }
-
-        switch(cpsr.mode)
-        {
-        case mode_user:
-        case mode_system:
-        {
-            for(int i = 0; i < 15; i++)
-            {
-                r[i] = saved_reg[i];
-            }
-            break;
-        }
-        case mode_fiq:
-        {
-            r8_fiq = saved_reg[8];
-            r9_fiq = saved_reg[9];
-            r10_fiq = saved_reg[10];
-            r11_fiq = saved_reg[11];
-            r12_fiq = saved_reg[12];
-            r13_fiq = saved_reg[13];
-            r14_fiq = saved_reg[14];
-            break;
-        }
-        case mode_irq:
-        {
-            r13_irq = saved_reg[13];
-            r14_irq = saved_reg[14];
-            break;
-        }
-        case mode_supervisor:
-        {
-            r13_svc = saved_reg[13];
-            r14_svc = saved_reg[14];
-            break;
-        }
-        case mode_abort:
-        {
-            r13_abt = saved_reg[13];
-            r14_abt = saved_reg[14];
-            break;
-        }
-        case mode_undefined:
-        {
-            r13_und = saved_reg[13];
-            r14_und = saved_reg[14];
-            break;
-        }
-        }
-        r[14] = r[15] + 4;
+        set_register(14, r[15] + 4);
         r[15] = 0x04;
         cpsr.thumb = false;
         cpsr.jazelle = false;
@@ -549,6 +207,47 @@ void arm_cpu::tick()
         for(int i = 0; i < 15; i++)
         {
             printf("R%d:%08x\n", i, r[i]);
+        }
+
+        bool condition = true;
+        switch((opcode >> 28) & 0xf)
+        {
+            case 0x0: condition = cpsr.zero; break;
+            case 0x1: condition = !cpsr.zero; break;
+            case 0x2: condition = cpsr.carry; break;
+            case 0x3: condition = !cpsr.carry; break;
+            case 0x4: condition = cpsr.sign; break;
+            case 0x5: condition = !cpsr.sign; break;
+            case 0x6: condition = cpsr.overflow; break;
+            case 0x7: condition = !cpsr.overflow; break;
+            case 0x8: condition = cpsr.carry && !cpsr.zero; break;
+            case 0x9: condition = !cpsr.carry || cpsr.zero; break;
+            case 0xa: condition = cpsr.sign == cpsr.overflow; break;
+            case 0xb: condition = cpsr.sign != cpsr.overflow; break;
+            case 0xc: condition = !cpsr.zero && (cpsr.sign == cpsr.overflow); break;
+            case 0xd: condition = cpsr.zero || (cpsr.sign != cpsr.overflow); break;
+            //case 0xe: condition = true; break;
+            case 0xf: condition = false; break;
+        }
+
+        switch((opcode >> 25) & 7)
+        {
+            case 0x5:
+            {
+                printf("[ARM] B\n");
+                if(condition)
+                {
+                    bool link = (opcode >> 24) & 1;
+                    u32 offset = (opcode & 0xffffff) << 2;
+                    
+                    if(offset & 0x2000000) offset |= 0xfc000000;
+                    if(link) set_register(14, r[15] - 4);
+                    
+                    r[15] += offset;
+                    just_branched = true;
+                }
+                break;
+            }
         }
     }
     else
