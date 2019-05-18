@@ -34,7 +34,7 @@ struct arm_cpu
     u32 opcode_2;
     u32 next_opcode;
 
-    union
+    union arm_psr
     {
         struct
         {
@@ -81,7 +81,14 @@ struct arm_cpu
 
     u32 get_register(int reg);
     void set_register(int reg, u32 data);
+    arm_psr get_spsr();
+    void set_spsr(u32 data);
 
+    u32 get_load_store_addr();
+    u32 get_shifter_operand(int s);
+
+    void tick_media();
+    void tick_dsp();
     void tick();
     void run(int insns);
 };

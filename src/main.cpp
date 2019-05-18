@@ -82,7 +82,7 @@ int main(int ac, char** av)
         
         memcpy(dev->lowram, dev->bootrom, 0x10000);
 
-        for(int i = 0; i < 100; i++)
+        for(int i = 0; i < 500; i++)
         {
             cpu.run(1);
             dev->tick();

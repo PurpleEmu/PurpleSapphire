@@ -25,7 +25,7 @@ void vic::init()
     daisy_priority = 0xf;
     current_intr = 33;
     current_highest_intr = 33;
-    stack_i = 0;
+    stack_i = 31;
 
     daisy_input = 0;
     
