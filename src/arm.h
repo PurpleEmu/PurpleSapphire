@@ -1,11 +1,7 @@
 #pragma once
 
 #include "common.h"
-
-enum arm_type
-{
-    arm7tdmi, arm9, arm1176jzf_s
-};
+#include "cp15.h"
 
 enum arm_mode
 {
@@ -22,6 +18,7 @@ enum arm_mode
 struct arm_cpu
 {
     arm_type type;
+    cp15_t cp15;
 
     u32 r[16];
 
@@ -85,6 +82,7 @@ struct arm_cpu
     void set_spsr(u32 data);
 
     u32 get_load_store_addr();
+    u32 get_load_store_multi_addr();
     u32 get_shifter_operand(int s);
 
     void tick_media();

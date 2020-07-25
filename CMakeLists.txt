@@ -19,6 +19,8 @@ src/arm.h
 src/clock.cpp
 src/clock.h
 src/common.h
+src/cp15.cpp
+src/cp15.h
 src/dmac.cpp
 src/dmac.h
 src/gpio.cpp

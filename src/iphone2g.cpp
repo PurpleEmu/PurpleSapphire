@@ -69,7 +69,7 @@ void iphone2g::init()
     usb_otg.device = this;
     usb_otg.init();
 
-    //cpu->cp15.peripheral_port_remap.whole = 0x38000012;
+    cpu->cp15.peripheral_port_remap.whole = 0x38000012;
     hle = false;
     do_print = true;
     reg_access_log = fopen("reglog.txt","w+");
@@ -176,12 +176,11 @@ u32 iphone2g_rw(void* dev, u32 addr)
         return device->nor[(addr+0) & 0xfffff] | (device->nor[(addr+1) & 0xfffff] << 8)
         | (device->nor[(addr+2) & 0xfffff] << 16) | (device->nor[(addr+3) & 0xfffff] << 24);
     }
-    //else if(addr >= (device->cpu->cp15.peripheral_port_remap.base_addr << 12)
-    //&& addr < ((device->cpu->cp15.peripheral_port_remap.base_addr << 12) + device->cpu->cp15.decode_peripheral_port_size()))
-    else if(addr >= 0x38000000 && addr < 0x40000000)
+    else if(addr >= (device->cpu->cp15.peripheral_port_remap.base_addr << 12)
+    && addr < ((device->cpu->cp15.peripheral_port_remap.base_addr << 12) + device->cpu->cp15.decode_peripheral_port_size()))
     {
-        u32 periph_addr = addr - 0x38000000;//(device->cpu->cp15.peripheral_port_remap.base_addr << 12);
-        /*if(periph_addr < 0x1000)
+        u32 periph_addr = addr - (device->cpu->cp15.peripheral_port_remap.base_addr << 12);
+        if(periph_addr < 0x1000)
         {
             u32 data = device->sha1.sha1_rw(addr & 0xfff);
             fprintf(device->reg_access_log, "Sha1 read %08x pc %08x\n", addr, device->cpu->r[15]);
@@ -247,12 +246,12 @@ u32 iphone2g_rw(void* dev, u32 addr)
             fprintf(device->reg_access_log, "Usb Phy read %08x pc %08x\n", addr, device->cpu->r[15]);
             return device->usb_phy.rw(addr & 0xfff);
         }
-        else */if(periph_addr >= 0x04500000 && periph_addr < 0x04501000)
+        else if(periph_addr >= 0x04500000 && periph_addr < 0x04501000)
         {
             fprintf(device->reg_access_log, "Clock1 read %08x pc %08x\n", addr, device->cpu->r[15]);
             return device->clock1.rw(addr & 0xfff);
         }
-        /*else if(periph_addr >= 0x04e00000 && periph_addr < 0x04e00100)
+        else if(periph_addr >= 0x04e00000 && periph_addr < 0x04e00100)
         {
             fprintf(device->reg_access_log, "Spi1 read %08x pc %08x\n", addr, device->cpu->r[15]);
             return device->spi[1].rw(addr & 0xff);
@@ -276,13 +275,8 @@ u32 iphone2g_rw(void* dev, u32 addr)
         {
             fprintf(device->reg_access_log, "GPIO read %08x pc %08x\n", addr, device->cpu->r[15]);
             return device->gpio.rw(addr & 0xfff);
-        }*/
+        }
         else fprintf(device->reg_access_log, "Unknown peripheral port address %08x; pc %08x\n", addr, device->cpu->r[15]);
-    }
-    else if(addr >= 0x88000000 && addr < 0x90000000)
-    {
-        return device->ram[(addr+0) - 0x88000000] | (device->ram[(addr+1) - 0x88000000] << 8)
-        | (device->ram[(addr+2) - 0x88000000] << 16) | (device->ram[(addr+3) - 0x88000000] << 24);
     }
     else printf("Unknown address %08x!\n", addr);
     return 0;
@@ -298,22 +292,6 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
         device->lowram[(addr+1) & 0x7ffffff] = (data >> 8) & 0xff;
         device->lowram[(addr+2) & 0x7ffffff] = (data >> 16) & 0xff;
         device->lowram[(addr+3) & 0x7ffffff] = (data >> 24) & 0xff;
-        if(addr >= 0x000447a0 && addr <= 0x00044b88)
-        {
-            printf("bufferPrint write %08x data %08x\n", addr, data);
-            if(device->cpu->r[15] == 0x0001423e)
-            {
-                char c1 = device->lowram[addr];
-                char c2 = device->lowram[addr + 1];
-                char c3 = device->lowram[addr + 2];
-                char c4 = device->lowram[addr + 3];
-                fputc(c1, device->serial_buffer_log);
-                fputc(c2, device->serial_buffer_log);
-                fputc(c3, device->serial_buffer_log);
-                fputc(c4, device->serial_buffer_log);
-                fflush(device->serial_buffer_log);
-            }
-        }
     }
     else if(addr >= 0x08000000 && addr < 0x10000000)
     {
@@ -334,11 +312,10 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
         device->sram[(addr+2) - 0x22000000] = (data >> 16) & 0xff;
         device->sram[(addr+3) - 0x22000000] = (data >> 24) & 0xff;
     }
-    //else if(addr >= (device->cpu->cp15.peripheral_port_remap.base_addr << 12)
-    //&& addr < ((device->cpu->cp15.peripheral_port_remap.base_addr << 12) + device->cpu->cp15.decode_peripheral_port_size()))
-    else if(addr >= 0x38000000 && addr < 0x40000000)
+    else if(addr >= (device->cpu->cp15.peripheral_port_remap.base_addr << 12)
+    && addr < ((device->cpu->cp15.peripheral_port_remap.base_addr << 12) + device->cpu->cp15.decode_peripheral_port_size()))
     {
-        u32 periph_addr = addr - 0x38000000;//(device->cpu->cp15.peripheral_port_remap.base_addr << 12);
+        u32 periph_addr = addr - (device->cpu->cp15.peripheral_port_remap.base_addr << 12);
         if(periph_addr < 0x1000)
         {
             fprintf(device->reg_access_log, "Sha1 write %08x data %08x pc %08x\n", addr, data, device->cpu->r[15]);
@@ -407,7 +384,7 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
         else if(periph_addr >= 0x04500000 && periph_addr < 0x04501000)
         {
             fprintf(device->reg_access_log, "Clock1 write %08x data %08x pc %08x\n", addr, data, device->cpu->r[15]);
-            //device->clock1.ww(addr & 0xfff, data);
+            device->clock1.ww(addr & 0xfff, data);
         }
         else if(periph_addr >= 0x04e00000 && periph_addr < 0x04e00100)
         {

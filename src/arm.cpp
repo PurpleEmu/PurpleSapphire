@@ -204,6 +204,33 @@ u32 arm_cpu::get_load_store_addr()
     return addr;
 }
 
+u32 arm_cpu::get_load_store_multi_addr()
+{
+    u16 reg_list = opcode & 0xffff;
+    int rn = (opcode >> 16) & 0xf;
+    bool w = (opcode >> 21) & 1;
+    bool u = (opcode >> 23) & 1;
+    bool p = (opcode >> 24) & 1;
+
+    u32 count = 0;
+    for(int i = 0; i < 16; i++)
+    {
+        if(reg_list & (1 << i)) count += 4;
+    }
+
+    u32 addr;
+    if(u) addr = get_register(rn) + (p ? 4 : 0);
+    else addr = get_register(rn) - count + (p ? 0 : 4);
+
+    if(w)
+    {
+        if(u) set_register(rn, get_register(rn) + count);
+        else set_register(rn, get_register(rn) - count);
+    }
+
+    return addr;
+}
+
 u32 arm_cpu::get_shifter_operand(int s)
 {
     int i = (opcode >> 25) & 1;
@@ -505,277 +532,405 @@ void arm_cpu::tick()
             case 0xf: condition = false; break;
         }
 
-        switch((opcode >> 25) & 7)
+        if((opcode & 0x0de0'0000) == 0x00a0'0000)
         {
-            case 0x0:
-            case 0x1:
+            printf("[ARM] ADC\n");
+            int rd = (opcode >> 12) & 0xf;
+            int rn = (opcode >> 16) & 0xf;
+            bool s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+            u64 result64 = (u64)get_register(rn) + shifter_operand + cpsr.carry;
+            u32 result = (u32)result64;
+
+            set_register(rd, result);
+
+            if(s)
             {
-                if(((opcode >> 4) & 1) && ((opcode >> 7) & 1)
-                && !((opcode >> 25) & 1))
+                if(rd != 15)
                 {
-                    if(((opcode >> 5) & 3) || ((opcode >> 24) & 1))
-                    {
-                        printf("[ARM] loadstore ext\n");
-                    }
-                    else
-                    {
-                        printf("[ARM] multiply ext\n");
-                    }
+                    cpsr.carry = result64 & 0x100000000ULL;
+                    cpsr.overflow = (~(get_register(rn) ^ shifter_operand) & (get_register(rn) ^ result) & 0x80000000);
+                    cpsr.sign = (result & 0x80000000) >> 31;
+                    cpsr.zero = !result;
                 }
-                else
-                {
-                    if((((opcode >> 23) & 3) == 2) && !((opcode >> 20) & 1))
-                    {
-                        tick_dsp();
-                    }
-                    else switch((opcode >> 21) & 0xf)
-                    {
-                        case 0x0:
-                        {
-                            printf("[ARM] AND\n");
-                            int rd = (opcode >> 12) & 0xf;
-                            int rn = (opcode >> 16) & 0xf;
-                            int s = (opcode >> 20) & 1;
-                            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
-
-                            set_register(rd, get_register(rn) & shifter_operand);
-
-                            if(s)
-                            {
-                                if(rd != 15)
-                                {
-                                    cpsr.zero = get_register(rd) == 0;
-                                    cpsr.sign = get_register(rd) & 0x80000000;
-                                }
-                                else cpsr.whole = get_spsr().whole;
-                            }
-                            break;
-                        }
-                        case 0x1:
-                        {
-                            printf("[ARM] EOR\n");
-                            int rd = (opcode >> 12) & 0xf;
-                            int rn = (opcode >> 16) & 0xf;
-                            int s = (opcode >> 20) & 1;
-                            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
-
-                            set_register(rd, get_register(rn) ^ shifter_operand);
-
-                            if(s)
-                            {
-                                if(rd != 15)
-                                {
-                                    cpsr.zero = get_register(rd) == 0;
-                                    cpsr.sign = get_register(rd) & 0x80000000;
-                                }
-                                else cpsr.whole = get_spsr().whole;
-                            }
-                            break;
-                        }
-                        case 0x8:
-                        {
-                            printf("[ARM] TST\n");
-                            int rn = (opcode >> 16) & 0xf;
-                            u32 shifter_operand = get_shifter_operand(true);
-
-                            u32 result = get_register(rn) & shifter_operand;
-
-                            cpsr.zero = result == 0;
-                            cpsr.sign = result & 0x80000000;
-                            break;
-                        }
-                        case 0x9:
-                        {
-                            printf("[ARM] TEQ\n");
-                            int rn = (opcode >> 16) & 0xf;
-                            u32 shifter_operand = get_shifter_operand(true);
-
-                            u32 result = get_register(rn) ^ shifter_operand;
-
-                            cpsr.zero = result == 0;
-                            cpsr.sign = result & 0x80000000;
-                            break;
-                        }
-                        case 0xa:
-                        {
-                            printf("[ARM] CMP\n");
-                            int rn = (opcode >> 16) & 0xf;
-                            u32 shifter_operand = get_shifter_operand(true);
-
-                            u32 rn_val = get_register(rn);
-                            u64 result64 = rn_val - shifter_operand;
-                            u32 result = (u32)result64;
-
-                            cpsr.carry = result64 < 0x100000000;
-                            cpsr.overflow = (rn_val ^ shifter_operand) & (rn_val ^ result) & 0x80000000;
-                            cpsr.zero = result == 0;
-                            cpsr.sign = result & 0x80000000;
-                            break;
-                        }
-                        case 0xb:
-                        {
-                            printf("[ARM] CMN\n");
-                            int rn = (opcode >> 16) & 0xf;
-                            u32 shifter_operand = get_shifter_operand(true);
-
-                            u32 rn_val = get_register(rn);
-                            u64 result64 = rn_val + shifter_operand;
-                            u32 result = (u32)result64;
-
-                            cpsr.carry = result64 > 0xffffffff;
-                            cpsr.overflow = ~(rn_val ^ shifter_operand) & (rn_val ^ result) & 0x80000000;
-                            cpsr.zero = result == 0;
-                            cpsr.sign = result & 0x80000000;
-                            break;
-                        }
-                        case 0xc:
-                        {
-                            printf("[ARM] ORR\n");
-                            int rd = (opcode >> 12) & 0xf;
-                            int rn = (opcode >> 16) & 0xf;
-                            int s = (opcode >> 20) & 1;
-                            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
-
-                            set_register(rd, get_register(rn) | shifter_operand);
-
-                            if(s)
-                            {
-                                if(rd != 15)
-                                {
-                                    cpsr.zero = get_register(rd) == 0;
-                                    cpsr.sign = get_register(rd) & 0x80000000;
-                                }
-                                else cpsr.whole = get_spsr().whole;
-                            }
-                            break;
-                        }
-                        case 0xd:
-                        {
-                            printf("[ARM] MOV\n");
-                            int rd = (opcode >> 12) & 0xf;
-                            int s = (opcode >> 20) & 1;
-                            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
-
-                            set_register(rd, shifter_operand);
-
-                            if(s)
-                            {
-                                if(rd != 15)
-                                {
-                                    cpsr.zero = get_register(rd) == 0;
-                                    cpsr.sign = get_register(rd) & 0x80000000;
-                                }
-                                else cpsr.whole = get_spsr().whole;
-                            }
-                            break;
-                        }
-                        case 0xe:
-                        {
-                            printf("[ARM] BIC\n");
-                            int rd = (opcode >> 12) & 0xf;
-                            int rn = (opcode >> 16) & 0xf;
-                            int s = (opcode >> 20) & 1;
-                            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
-
-                            set_register(rd, get_register(rn) & ~shifter_operand);
-
-                            if(s)
-                            {
-                                if(rd != 15)
-                                {
-                                    cpsr.zero = get_register(rd) == 0;
-                                    cpsr.sign = get_register(rd) & 0x80000000;
-                                }
-                                else cpsr.whole = get_spsr().whole;
-                            }
-                            break;
-                        }
-                        case 0xf:
-                        {
-                            printf("[ARM] MVN\n");
-                            int rd = (opcode >> 12) & 0xf;
-                            int s = (opcode >> 20) & 1;
-                            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
-
-                            set_register(rd, ~shifter_operand);
-
-                            if(s)
-                            {
-                                if(rd != 15)
-                                {
-                                    cpsr.zero = get_register(rd) == 0;
-                                    cpsr.sign = get_register(rd) & 0x80000000;
-                                }
-                                else cpsr.whole = get_spsr().whole;
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                break;
+                else cpsr.whole = get_spsr().whole;
             }
-            case 0x2:
-            case 0x3:
+        }
+        else if((opcode & 0x0de0'0000) == 0x0080'0000)
+        {
+            printf("[ARM] ADD\n");
+            int rd = (opcode >> 12) & 0xf;
+            int rn = (opcode >> 16) & 0xf;
+            bool s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+            u64 result64 = (u64)get_register(rn) + shifter_operand;
+            u32 result = (u32)result64;
+
+            set_register(rd, result);
+
+            if(s)
             {
-                if(((opcode >> 4) & 1) && ((opcode >> 25) & 1)) tick_media();
-                else
+                if(rd != 15)
                 {
-                    if((opcode >> 20) & 1)
+                    cpsr.carry = result64 & 0x100000000ULL;
+                    cpsr.overflow = (~(get_register(rn) ^ shifter_operand) & (get_register(rn) ^ result) & 0x80000000);
+                    cpsr.sign = (result & 0x80000000) >> 31;
+                    cpsr.zero = !result;
+                }
+                else cpsr.whole = get_spsr().whole;
+            }
+        }
+        else if((opcode & 0x0f00'0000) == 0x0a00'0000)
+        {
+            printf("[ARM] B\n");
+            if(condition)
+            {
+                u32 offset = (opcode & 0xffffff) << 2;
+                
+                if(offset & 0x2000000) offset |= 0xfc000000;
+                    
+                r[15] += offset;
+                just_branched = true;
+            }
+        }
+        else if((opcode & 0x0de0'0000) == 0x01c0'0000)
+        {
+            printf("[ARM] BIC\n");
+            int rd = (opcode >> 12) & 0xf;
+            int rn = (opcode >> 16) & 0xf;
+            int s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+
+            set_register(rd, get_register(rn) & ~shifter_operand);
+
+            if(s)
+            {
+                if(rd != 15)
+                {
+                    cpsr.zero = get_register(rd) == 0;
+                    cpsr.sign = get_register(rd) & 0x8000'0000;
+                }
+                else cpsr.whole = get_spsr().whole;
+            }
+        }
+        else if((opcode & 0x0f00'0000) == 0x0b00'0000)
+        {
+            printf("[ARM] BL\n");
+            if(condition)
+            {
+                u32 offset = (opcode & 0xffffff) << 2;
+                
+                if(offset & 0x2000000) offset |= 0xfc000000;
+                set_register(14, r[15] - 4);    
+                    
+                r[15] += offset;
+                just_branched = true;
+            }
+        }
+        else if((opcode & 0x0df0'0000) == 0x0150'0000)
+        {
+            printf("[ARM] CMP\n");
+            int rn = (opcode >> 16) & 0xf;
+            u32 shifter_operand = get_shifter_operand(true);
+
+            u32 rn_val = get_register(rn);
+            u64 result64 = rn_val - shifter_operand;
+            u32 result = (u32)result64;
+
+            cpsr.carry = result64 < 0x100000000;
+            cpsr.overflow = (rn_val ^ shifter_operand) & (rn_val ^ result) & 0x80000000;
+            cpsr.zero = result == 0;
+            cpsr.sign = result & 0x80000000;
+        }
+        else if((opcode & 0x0e50'0000) == 0x0810'0000)
+        {
+            printf("[ARM] LDM\n");
+            u16 reg_list = opcode & 0xffff;
+            bool pc = reg_list & 0x8000;
+            int rn = (opcode >> 16) & 0xf;
+            bool w = (opcode >> 21) & 1;
+            bool s = (opcode >> 22) & 1;
+
+            if(condition)
+            {
+                arm_mode oldmode = cpsr.mode;
+                if(s && !pc) cpsr.mode = mode_user;
+                u32 addr = get_load_store_multi_addr() & 0xfffffffc;
+                for(int i = 0; i < 15; i++)
+                {
+                    if(reg_list & (1 << i))
                     {
-                        if((opcode >> 22) & 1)
-                        {
-                            printf("[ARM] LDRB\n");
-                        }
-                        else
-                        {
-                            printf("[ARM] LDR\n");
-                            int rd = (opcode >> 12) & 0xf;
-                            u32 addr = get_load_store_addr();
-                            u32 value = rw(addr & 0xfffffffc);
-                            value = (value >> ((addr & 3) << 3)) | (value << (32 - ((addr & 3) << 3)));
-                            if(rd == 15)
-                            {
-                                r[15] = value & 0xfffffffe;
-                                cpsr.thumb = value & 1;
-                                just_branched = true;
-                            }
-                            else set_register(rd, value);
-                        }
-                    }
-                    else
-                    {
-                        if((opcode >> 22) & 1)
-                        {
-                            printf("[ARM] STRB\n");
-                        }
-                        else
-                        {
-                            printf("[ARM] STR\n");
-                            int rd = (opcode >> 12) & 0xf;
-                            u32 addr = get_load_store_addr();
-                            ww(addr, get_register(rd));
-                        }
+                        r[i] = rw(addr);
+                        addr += 4;
                     }
                 }
-                break;
-            }
-            case 0x5:
-            {
-                printf("[ARM] B\n");
-                if(condition)
+
+                cpsr.mode = oldmode;
+
+                if(pc)
                 {
-                    bool link = (opcode >> 24) & 1;
-                    u32 offset = (opcode & 0xffffff) << 2;
-                    
-                    if(offset & 0x2000000) offset |= 0xfc000000;
-                    if(link) set_register(14, r[15] - 4);
-                    
-                    r[15] += offset;
+                    u32 data = rw(addr);
+                    r[15] = data & 0xfffffffe;
                     just_branched = true;
+                    cpsr.thumb = data & 1;
+                    if(s) cpsr.whole = get_spsr().whole;
                 }
-                break;
             }
+        }
+        else if((opcode & 0x0c50'0000) == 0x0410'0000)
+        {
+            printf("[ARM] LDR\n");
+            int rd = (opcode >> 12) & 0xf;
+            u32 addr = get_load_store_addr();
+            u32 value = rw(addr & 0xffff'fffc);
+            value = (value >> ((addr & 3) << 3)) | (value << (32 - ((addr & 3) << 3)));
+            if(rd == 15)
+            {
+                r[15] = value & 0xffff'fffe;
+                cpsr.thumb = value & 1;
+                just_branched = true;
+            }
+            else set_register(rd, value);
+        }
+        else if((opcode & 0x0f10'0010) == 0x0e00'0010)
+        {
+            printf("[ARM] MCR\n");
+            int crm = opcode & 0xf;
+            int opcode2 = (opcode >> 5) & 7;
+            int cp_index = (opcode >> 8) & 0xf;
+            int rd = (opcode >> 12) & 0xf;
+            int crn = (opcode >> 16) & 0xf;
+            int opcode1 = (opcode >> 21) & 7;
+            if(cp_index == 15) cp15.write(opcode1, opcode2, crn, crm, r[rd]);
+        }
+        else if((opcode & 0x0de0'0000) == 0x01a0'0000)
+        {
+            printf("[ARM] MOV\n");
+            int rd = (opcode >> 12) & 0xf;
+            int s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+
+            set_register(rd, shifter_operand);
+
+            if(s)
+            {
+                if(rd != 15)
+                {
+                    cpsr.zero = get_register(rd) == 0;
+                    cpsr.sign = get_register(rd) & 0x8000'0000;
+                }
+                else cpsr.whole = get_spsr().whole;
+            }
+        }
+        else if((opcode & 0x0f10'0010) == 0x0e10'0010)
+        {
+            printf("[ARM] MRC\n");
+            int CRm = opcode & 0xf;
+            int opcode2 = (opcode >> 5) & 7;
+            int cp_index = (opcode >> 8) & 0xf;
+            int rd = (opcode >> 12) & 0xf;
+            int CRn = (opcode >> 16) & 0xf;
+            int opcode1 = (opcode >> 21) & 7;
+
+            if(cp_index == 15)
+            {
+                u32 data = cp15.read(opcode1, opcode2, CRn, CRm);
+
+                if(rd == 15) cpsr.whole = (cpsr.whole & 0x0fffffff) | (data & 0xf0000000);
+                else r[rd] = data;
+            }
+        }
+        else if((opcode & 0x0fb0'0000) == 0x0120'0000)
+        {
+            printf("[ARM] MSR\n");
+            int rm = opcode & 0xf;
+            u32 mask = (opcode >> 16) & 0xf;
+            int r = (opcode >> 22) & 1;
+        
+            u32 byte_mask = 0;
+            if(mask & 1) byte_mask |= 0xff;
+            if(mask & 2) byte_mask |= 0xff00;
+            if(mask & 4) byte_mask |= 0xff0000;
+            if(mask & 8) byte_mask |= 0xff000000;
+
+            u32 value = get_register(rm);
+
+            if(r)
+            {
+                mask = byte_mask & 0xF90F03FF; //User, Privileged, State bits
+                set_spsr((get_spsr().whole & ~mask) | (value & mask));
+            }
+            else
+            {
+                mask = byte_mask & (cpsr.mode == arm_mode::mode_user ? 0xf80f0200 : 0xf80f03df);
+                cpsr.whole = (cpsr.whole & ~mask) | (value & mask);
+            }
+        }
+        else if((opcode & 0x0fb0'0000) == 0x0320'0000)
+        {
+            printf("[ARM] MSR\n");
+            u32 mask = (opcode >> 16) & 0xf;
+            int r = (opcode >> 22) & 1;
+        
+            u32 byte_mask = 0;
+            if(mask & 1) byte_mask |= 0xff;
+            if(mask & 2) byte_mask |= 0xff00;
+            if(mask & 4) byte_mask |= 0xff0000;
+            if(mask & 8) byte_mask |= 0xff000000;
+
+            u32 imm = opcode & 0xff;
+            int rotate = (opcode >> 7) & 0x1e;
+            u32 value = (imm >> rotate) | (imm << (32 - rotate));
+
+            if(r)
+            {
+                mask = byte_mask & 0xF90F03FF; //User, Privileged, State bits
+                set_spsr((get_spsr().whole & ~mask) | (value & mask));
+            }
+            else
+            {
+                mask = byte_mask & (cpsr.mode == arm_mode::mode_user ? 0xf80f0200 : 0xf80f03df);
+                cpsr.whole = (cpsr.whole & ~mask) | (value & mask);
+            }
+        }
+        else if((opcode & 0x0de0'0000) == 0x01e0'0000)
+        {
+            printf("[ARM] MVN\n");
+            int rd = (opcode >> 12) & 0xf;
+            int s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+
+            set_register(rd, ~shifter_operand);
+
+            if(s)
+            {
+                if(rd != 15)
+                {
+                    cpsr.zero = get_register(rd) == 0;
+                    cpsr.sign = get_register(rd) & 0x8000'0000;
+                }
+                else cpsr.whole = get_spsr().whole;
+            }
+        }
+        else if((opcode & 0x0de0'0000) == 0x0180'0000)
+        {
+            printf("[ARM] ORR\n");
+            int rd = (opcode >> 12) & 0xf;
+            int rn = (opcode >> 16) & 0xf;
+            int s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+
+            set_register(rd, get_register(rn) | shifter_operand);
+
+            if(s)
+            {
+                if(rd != 15)
+                {
+                    cpsr.zero = get_register(rd) == 0;
+                    cpsr.sign = get_register(rd) & 0x80000000;
+                }
+                else cpsr.whole = get_spsr().whole;
+            }
+        }
+        else if((opcode & 0x0de0'0000) == 0x00c0'0000)
+        {
+            printf("[ARM] SBC\n");
+            int rd = (opcode >> 12) & 0xf;
+            int rn = (opcode >> 16) & 0xf;
+            bool s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+            u64 result64 = (u64)get_register(rn) - shifter_operand - ~cpsr.carry;
+            u32 result = (u32)result64;
+
+            set_register(rd, result);
+
+            if(s)
+            {
+                if(rd != 15)
+                {
+                    cpsr.carry = result64 & 0x100000000ULL;
+                    cpsr.overflow = (~(get_register(rn) ^ shifter_operand) & (get_register(rn) ^ result) & 0x80000000);
+                    cpsr.sign = (result & 0x80000000) >> 31;
+                    cpsr.zero = !result;
+                }
+                else cpsr.whole = get_spsr().whole;
+            }
+        }
+        else if((opcode & 0x0e50'0000) == 0x0800'0000)
+        {
+            printf("[ARM] STM\n");
+            u16 reg_list = opcode & 0xffff;
+                    int rn = (opcode >> 16) & 0xf;
+                    int w = (opcode >> 21) & 1;
+                    int s = (opcode >> 22) & 1;
+                    int u = (opcode >> 23) & 1;
+                    int p = (opcode >> 24) & 1;
+
+                    u32 addr;
+                    if(u) addr = get_register(rn) + (p << 2);
+                    else
+                    {
+                        addr = get_register(rn) + ((!p) << 2);
+                        for(int i = 0; i < 16; i++)
+                        {
+                            if(reg_list & (1 << i)) addr -= 4;
+                        }
+                    }
+
+                    u32 count = 0;
+                    arm_mode oldmode = cpsr.mode;
+                    if(s) cpsr.mode = mode_user;
+                    for(int i = 0; i < 16; i++)
+                    {
+                        if(reg_list & (1 << i))
+                        {
+                            ww(addr + count, r[i]);
+                            count += 4;
+                        }
+                    }
+
+                    cpsr.mode = oldmode;
+
+                    if(w)
+                    {
+                        if(u) set_register(rn, get_register(rn) + count);
+                        else set_register(rn, get_register(rn) - count);
+                    }
+        }
+        else if((opcode & 0x0c50'0000) == 0x0400'0000)
+        {
+            printf("[ARM] STR\n");
+            int rd = (opcode >> 12) & 0xf;
+            u32 addr = get_load_store_addr();
+            ww(addr, get_register(rd));
+        }
+        else if((opcode & 0x0de0'0000) == 0x0040'0000)
+        {
+            printf("[ARM] SUB\n");
+            int rd = (opcode >> 12) & 0xf;
+            int rn = (opcode >> 16) & 0xf;
+            bool s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+            u64 result64 = (u64)get_register(rn) - shifter_operand;
+            u32 result = (u32)result64;
+
+            set_register(rd, result);
+
+            if(s)
+            {
+                if(rd != 15)
+                {
+                    cpsr.carry = result64 & 0x100000000ULL;
+                    cpsr.overflow = (~(get_register(rn) ^ shifter_operand) & (get_register(rn) ^ result) & 0x80000000);
+                    cpsr.sign = (result & 0x80000000) >> 31;
+                    cpsr.zero = !result;
+                }
+                else cpsr.whole = get_spsr().whole;
+            }
+        }
+        else
+        {
+            printf("[ARM] Unknown opcode %08x!\n", opcode);
         }
     }
     else
