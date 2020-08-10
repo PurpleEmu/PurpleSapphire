@@ -30,6 +30,7 @@ void clock1_t::init()
 {
     //TODO
     config0 = 0;
+    config1 = 0;
     pll_lock = 1; //HACK: boot rom needs this to not infinite loop
     pll_mode.whole = 0;
 }

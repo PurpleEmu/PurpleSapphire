@@ -327,88 +327,6 @@ u32 arm_cpu::get_shifter_operand(int s)
     }
 }
 
-void arm_cpu::tick_media()
-{
-}
-
-void arm_cpu::tick_dsp()
-{
-    if((opcode >> 25) & 1)
-    {
-        printf("[ARM] MSR\n");
-        u32 mask = (opcode >> 16) & 0xf;
-        int r = (opcode >> 22) & 1;
-        
-        u32 byte_mask = 0;
-        if(mask & 1) byte_mask |= 0xff;
-        if(mask & 2) byte_mask |= 0xff00;
-        if(mask & 4) byte_mask |= 0xff0000;
-        if(mask & 8) byte_mask |= 0xff000000;
-
-        u32 imm = opcode & 0xff;
-        int rotate = (opcode >> 7) & 0x1e;
-        u32 value = (imm >> rotate) | (imm << (32 - rotate));
-
-        if(r)
-        {
-            mask = byte_mask & 0xF90F03FF; //User, Privileged, State bits
-            set_spsr((get_spsr().whole & ~mask) | (value & mask));
-        }
-        else
-        {
-            mask = byte_mask & (cpsr.mode == arm_mode::mode_user ? 0xf80f0200 : 0xf80f03df);
-            cpsr.whole = (cpsr.whole & ~mask) | (value & mask);
-        }
-    }
-    else
-    {
-        if((opcode >> 7) & 1)
-        {
-            printf("[ARM] signed multiplies\n");
-        }
-        else
-        {
-            switch((opcode >> 4) & 7)
-            {
-                case 0:
-                {
-                    if((opcode >> 21) & 1)
-                    {
-                        printf("[ARM] MSR\n");
-                        int rm = opcode & 0xf;
-                        u32 mask = (opcode >> 16) & 0xf;
-                        int r = (opcode >> 22) & 1;
-        
-                        u32 byte_mask = 0;
-                        if(mask & 1) byte_mask |= 0xff;
-                        if(mask & 2) byte_mask |= 0xff00;
-                        if(mask & 4) byte_mask |= 0xff0000;
-                        if(mask & 8) byte_mask |= 0xff000000;
-
-                        u32 value = get_register(rm);
-
-                        if(r)
-                        {
-                            mask = byte_mask & 0xF90F03FF; //User, Privileged, State bits
-                            set_spsr((get_spsr().whole & ~mask) | (value & mask));
-                        }
-                        else
-                        {
-                            mask = byte_mask & (cpsr.mode == arm_mode::mode_user ? 0xf80f0200 : 0xf80f03df);
-                            cpsr.whole = (cpsr.whole & ~mask) | (value & mask);
-                        }
-                    }
-                    else
-                    {
-                        printf("[ARM] MRS\n");
-                    }
-                    break;
-                }
-            }
-        }
-    }
-}
-
 void arm_cpu::tick()
 {
     u32 true_r15 = 0;
@@ -508,7 +426,7 @@ void arm_cpu::tick()
         printf("Opcode:%08x\nPC:%08x\n", opcode, true_r15);
         for(int i = 0; i < 15; i++)
         {
-            printf("R%d:%08x\n", i, r[i]);
+            printf("R%d:%08x\n", i, get_register(i));
         }
 
         bool condition = true;
@@ -580,14 +498,34 @@ void arm_cpu::tick()
                 else cpsr.whole = get_spsr().whole;
             }
         }
+        else if((opcode & 0x0de0'0000) == 0x0000'0000)
+        {
+            printf("[ARM] AND\n");
+            int rd = (opcode >> 12) & 0xf;
+            int rn = (opcode >> 16) & 0xf;
+            int s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+
+            set_register(rd, get_register(rn) & shifter_operand);
+
+            if(s)
+            {
+                if(rd != 15)
+                {
+                    cpsr.zero = get_register(rd) == 0;
+                    cpsr.sign = get_register(rd) & 0x8000'0000;
+                }
+                else cpsr.whole = get_spsr().whole;
+            }
+        }
         else if((opcode & 0x0f00'0000) == 0x0a00'0000)
         {
             printf("[ARM] B\n");
             if(condition)
             {
-                u32 offset = (opcode & 0xffffff) << 2;
+                u32 offset = (opcode & 0xff'ffff) << 2;
                 
-                if(offset & 0x2000000) offset |= 0xfc000000;
+                if(offset & 0x200'0000) offset |= 0xfc00'0000;
                     
                 r[15] += offset;
                 just_branched = true;
@@ -621,9 +559,20 @@ void arm_cpu::tick()
                 u32 offset = (opcode & 0xffffff) << 2;
                 
                 if(offset & 0x2000000) offset |= 0xfc000000;
-                set_register(14, r[15] - 4);    
+                set_register(14, r[15] - 4);
                     
                 r[15] += offset;
+                just_branched = true;
+            }
+        }
+        else if((opcode & 0x0ff0'00f0) == 0x0120'0010)
+        {
+            printf("[ARM] BX\n");
+            int rm = opcode & 0xf;
+            if(condition)
+            {
+                cpsr.thumb = get_register(rm) & 1;
+                r[15] = get_register(rm) & 0xffff'fffe;
                 just_branched = true;
             }
         }
@@ -648,32 +597,113 @@ void arm_cpu::tick()
             u16 reg_list = opcode & 0xffff;
             bool pc = reg_list & 0x8000;
             int rn = (opcode >> 16) & 0xf;
+            u32 rn_val = get_register(rn);
             bool w = (opcode >> 21) & 1;
             bool s = (opcode >> 22) & 1;
+            bool u = (opcode >> 23) & 1;
+            bool p = (opcode >> 24) & 1;
+            u32 result = 0;
 
-            if(condition)
+            if(u) //Incrementing
             {
-                arm_mode oldmode = cpsr.mode;
-                if(s && !pc) cpsr.mode = mode_user;
-                u32 addr = get_load_store_multi_addr() & 0xfffffffc;
-                for(int i = 0; i < 15; i++)
+                if(!p)
                 {
-                    if(reg_list & (1 << i))
+                    rn_val -= 4;
+                }
+
+                uint32_t data;
+
+                if(s && !pc)
+                {
+                    for(int i = 0; i < 16; i++)
                     {
-                        r[i] = rw(addr);
-                        addr += 4;
+                        if((reg_list >> i) & 1)
+                        {
+                            data = rw(rn_val += 4);
+                            if(i == 15)
+                            {
+                                r[15] = data & 0xffff'fffe;
+                                cpsr.thumb = data & 1;
+                                just_branched = true;
+                                if(s) cpsr.whole = get_spsr().whole;
+                            }
+                            else r[i] = data;
+                            result++;
+                        }
+                    }
+                }
+                else for(int i = 0; i < 16; i++)
+                {
+                    if((reg_list >> i) & 1)
+                    {
+                        data = rw(rn_val += 4);
+                        if(i == 15)
+                        {
+                            r[15] = data & 0xffff'fffe;
+                            cpsr.thumb = data & 1;
+                            just_branched = true;
+                            if(s) cpsr.whole = get_spsr().whole;
+                        }
+                        else set_register(i, data);
+                        result++;
                     }
                 }
 
-                cpsr.mode = oldmode;
-
-                if(pc)
+                if(w)
                 {
-                    u32 data = rw(addr);
-                    r[15] = data & 0xfffffffe;
-                    just_branched = true;
-                    cpsr.thumb = data & 1;
-                    if(s) cpsr.whole = get_spsr().whole;
+                    if(!((reg_list >> rn) & 1)) set_register(rn, get_register(rn) + (result << 2));
+                }
+            }
+            else //Decrementing
+            {
+                if(!p)
+                {
+                    rn_val += 4;
+                }
+
+                uint32_t data;
+
+                if(s && !pc)
+                {
+                    for(int i = 15; i >= 0; i--)
+                    {
+                        if((reg_list >> i) & 1)
+                        {
+                            data = rw(rn_val);
+                            rn_val -= 4;
+                            if(i == 15)
+                            {
+                                r[15] = data & 0xffff'fffe;
+                                cpsr.thumb = data & 1;
+                                just_branched = true;
+                                if(s) cpsr.whole = get_spsr().whole;
+                            }
+                            else r[i] = data;
+                            result++;
+                        }
+                    }
+                }
+                else for(int i = 15; i >= 0; i--)
+                {
+                    if((reg_list >> i) & 1)
+                    {
+                        data = rw(rn_val);
+                        rn_val -= 4;
+                        if(i == 15)
+                        {
+                            r[15] = data & 0xffff'fffe;
+                            cpsr.thumb = data & 1;
+                            just_branched = true;
+                            if(s) cpsr.whole = get_spsr().whole;
+                        }
+                        else set_register(i, data);
+                        result++;
+                    }
+                }
+
+                if(w)
+                {
+                    if(!((reg_list >> rn) & 1)) set_register(rn, get_register(rn) - (result << 2));
                 }
             }
         }
@@ -682,6 +712,7 @@ void arm_cpu::tick()
             printf("[ARM] LDR\n");
             int rd = (opcode >> 12) & 0xf;
             u32 addr = get_load_store_addr();
+            printf("LDR addr %08x\n", addr);
             u32 value = rw(addr & 0xffff'fffc);
             value = (value >> ((addr & 3) << 3)) | (value << (32 - ((addr & 3) << 3)));
             if(rd == 15)
@@ -710,7 +741,13 @@ void arm_cpu::tick()
             int s = (opcode >> 20) & 1;
             u32 shifter_operand = get_shifter_operand(s && (rd != 15));
 
-            set_register(rd, shifter_operand);
+            if(rd == 15)
+            {
+                r[15] = shifter_operand & 0xffff'fffe;
+                cpsr.thumb = shifter_operand & 1;
+                just_branched = true;
+            }
+            else set_register(rd, shifter_operand);
 
             if(s)
             {
@@ -832,6 +869,54 @@ void arm_cpu::tick()
                 else cpsr.whole = get_spsr().whole;
             }
         }
+        else if((opcode & 0x0de0'0000) == 0x0060'0000)
+        {
+            printf("[ARM] RSB\n");
+            int rd = (opcode >> 12) & 0xf;
+            int rn = (opcode >> 16) & 0xf;
+            bool s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+            u64 result64 = (u64)shifter_operand - (u64)get_register(rn);
+            u32 result = (u32)result64;
+
+            set_register(rd, result);
+
+            if(s)
+            {
+                if(rd != 15)
+                {
+                    cpsr.carry = !(result64 & 0x1'0000'0000ULL);
+                    cpsr.overflow = (~(get_register(rn) ^ shifter_operand) & (get_register(rn) ^ result) & 0x80000000);
+                    cpsr.sign = (result & 0x80000000) >> 31;
+                    cpsr.zero = !result;
+                }
+                else cpsr.whole = get_spsr().whole;
+            }
+        }
+        else if((opcode & 0x0de0'0000) == 0x00e0'0000)
+        {
+            printf("[ARM] RSC\n");
+            int rd = (opcode >> 12) & 0xf;
+            int rn = (opcode >> 16) & 0xf;
+            bool s = (opcode >> 20) & 1;
+            u32 shifter_operand = get_shifter_operand(s && (rd != 15));
+            u64 result64 = (u64)shifter_operand - (u64)get_register(rn) - ~cpsr.carry;
+            u32 result = (u32)result64;
+
+            set_register(rd, result);
+
+            if(s)
+            {
+                if(rd != 15)
+                {
+                    cpsr.carry = !(result64 & 0x100000000ULL);
+                    cpsr.overflow = (~(get_register(rn) ^ shifter_operand) & (get_register(rn) ^ result) & 0x80000000);
+                    cpsr.sign = (result & 0x80000000) >> 31;
+                    cpsr.zero = !result;
+                }
+                else cpsr.whole = get_spsr().whole;
+            }
+        }
         else if((opcode & 0x0de0'0000) == 0x00c0'0000)
         {
             printf("[ARM] SBC\n");
@@ -848,7 +933,7 @@ void arm_cpu::tick()
             {
                 if(rd != 15)
                 {
-                    cpsr.carry = result64 & 0x100000000ULL;
+                    cpsr.carry = !(result64 & 0x100000000ULL);
                     cpsr.overflow = (~(get_register(rn) ^ shifter_operand) & (get_register(rn) ^ result) & 0x80000000);
                     cpsr.sign = (result & 0x80000000) >> 31;
                     cpsr.zero = !result;
@@ -860,42 +945,90 @@ void arm_cpu::tick()
         {
             printf("[ARM] STM\n");
             u16 reg_list = opcode & 0xffff;
-                    int rn = (opcode >> 16) & 0xf;
-                    int w = (opcode >> 21) & 1;
-                    int s = (opcode >> 22) & 1;
-                    int u = (opcode >> 23) & 1;
-                    int p = (opcode >> 24) & 1;
+            bool pc = reg_list & 0x8000;
+            int rn = (opcode >> 16) & 0xf;
+            u32 rn_val = get_register(rn);
+            bool w = (opcode >> 21) & 1;
+            bool s = (opcode >> 22) & 1;
+            bool u = (opcode >> 23) & 1;
+            bool p = (opcode >> 24) & 1;
+            u32 result = 0;
 
-                    u32 addr;
-                    if(u) addr = get_register(rn) + (p << 2);
-                    else
-                    {
-                        addr = get_register(rn) + ((!p) << 2);
-                        for(int i = 0; i < 16; i++)
-                        {
-                            if(reg_list & (1 << i)) addr -= 4;
-                        }
-                    }
-
-                    u32 count = 0;
-                    arm_mode oldmode = cpsr.mode;
-                    if(s) cpsr.mode = mode_user;
+            if(pc)
+            {
+                //special case for r15
+                r[15] += 12;
+            }
+            if(u) //Incrementing
+            {
+                if(!p)
+                {
+                    rn_val -= 4;
+                }
+                
+                if(s)
+                {
                     for(int i = 0; i < 16; i++)
                     {
-                        if(reg_list & (1 << i))
+                        if((reg_list >> i) & 1)
                         {
-                            ww(addr + count, r[i]);
-                            count += 4;
+                            ww(rn_val, r[i]);
+                            rn_val += 4;
+                            result++;
                         }
                     }
-
-                    cpsr.mode = oldmode;
-
-                    if(w)
+                }
+                else for(int i = 0; i < 16; i++)
+                {
+                    if((reg_list >> i) & 1)
                     {
-                        if(u) set_register(rn, get_register(rn) + count);
-                        else set_register(rn, get_register(rn) - count);
+                        ww(rn_val, get_register(i));
+                        rn_val += 4;
+                        result++;
                     }
+                }
+
+                if(w)
+                {
+                    if(!((reg_list >> rn) & 1)) set_register(rn, get_register(rn) + (result << 2));
+                }
+            }
+            else //Decrementing
+            {
+                if(!p)
+                {
+                    rn_val += 4;
+                }
+
+                for(int i = 0; i < 16; i++)
+                {
+                    if((reg_list >> i) & 1)
+                    {
+                        result++;
+                    }
+                }
+                rn_val -= (result << 2);
+                for(int i = 0; i < 16; i++)
+                {
+                    if((reg_list >> i) & 1)
+                    {
+                        if(!s) ww(rn_val, get_register(i));
+                        else ww(rn_val, r[i]);
+                        rn_val += 4;
+                    }
+                }
+
+                if(w)
+                {
+                    if(!((reg_list >> rn) & 1)) set_register(rn, get_register(rn) - (result << 2));
+                }
+            }
+            if(pc)
+            {
+                r[15] -= 12;
+                just_branched = true;
+            }
+            
         }
         else if((opcode & 0x0c50'0000) == 0x0400'0000)
         {
@@ -903,6 +1036,16 @@ void arm_cpu::tick()
             int rd = (opcode >> 12) & 0xf;
             u32 addr = get_load_store_addr();
             ww(addr, get_register(rd));
+        }
+        else if((opcode & 0x0c50'0000) == 0x0440'0000)
+        {
+            printf("[ARM] STRB\n");
+            int rd = (opcode >> 12) & 0xf;
+            u32 addr = get_load_store_addr();
+            u32 data = rw(addr);
+            data &= ~0xff;
+            data |= get_register(rd) & 0xff;
+            ww(addr, data);
         }
         else if((opcode & 0x0de0'0000) == 0x0040'0000)
         {
@@ -920,13 +1063,25 @@ void arm_cpu::tick()
             {
                 if(rd != 15)
                 {
-                    cpsr.carry = result64 & 0x100000000ULL;
+                    cpsr.carry = !(result64 & 0x1'0000'0000ULL);
                     cpsr.overflow = (~(get_register(rn) ^ shifter_operand) & (get_register(rn) ^ result) & 0x80000000);
                     cpsr.sign = (result & 0x80000000) >> 31;
                     cpsr.zero = !result;
                 }
                 else cpsr.whole = get_spsr().whole;
             }
+        }
+        else if((opcode & 0x0df0'0000) == 0x0110'0000)
+        {
+            printf("[ARM] TST\n");
+            int rn = (opcode >> 16) & 0xf;
+            u32 shifter_operand = get_shifter_operand(true);
+
+            u32 rn_val = get_register(rn);
+            u32 result = rn_val & shifter_operand;
+
+            cpsr.zero = result == 0;
+            cpsr.sign = result & 0x80000000;
         }
         else
         {

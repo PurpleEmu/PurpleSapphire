@@ -158,7 +158,7 @@ u32 iphone2g_rw(void* dev, u32 addr)
     }
     else if(addr >= 0x22000000 && addr < 0x22500000)
     {
-        //printf("SRAM read %08x\n", addr);
+        printf("SRAM read %08x\n", addr);
         /*if(addr != 0x22026430 && addr != 0x22026428 && addr != 0x22026574
         && addr != 0x22026378 && addr != 0x22026394)
         {*/
@@ -306,7 +306,7 @@ void iphone2g_ww(void* dev, u32 addr, u32 data)
     }
     else if(addr >= 0x22000000 && addr < 0x22500000)
     {
-        //printf("SRAM write %08x data %08x\n", addr, data);
+        printf("SRAM write %08x data %08x\n", addr, data);
         device->sram[(addr+0) - 0x22000000] = (data >> 0) & 0xff;
         device->sram[(addr+1) - 0x22000000] = (data >> 8) & 0xff;
         device->sram[(addr+2) - 0x22000000] = (data >> 16) & 0xff;

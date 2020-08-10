@@ -85,8 +85,6 @@ struct arm_cpu
     u32 get_load_store_multi_addr();
     u32 get_shifter_operand(int s);
 
-    void tick_media();
-    void tick_dsp();
     void tick();
     void run(int insns);
 };
