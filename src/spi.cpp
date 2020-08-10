@@ -10,11 +10,11 @@ void spi_t::init()
 void spi_t::tick()
 {
     iphone2g* dev = (iphone2g*)device;
-    if(interrupt_count > 0)
+    /*if(interrupt_count > 0)
     {
         interrupt_count--;
         if(!interrupt_count) dev->interrupt(interrupt, true);
-    }
+    }*/
 }
 
 u32 spi_t::rw(u32 addr)
@@ -56,7 +56,8 @@ void spi_t::ww(u32 addr, u32 data)
             {
                 status |= 0xff2;
                 cmd = tx_data;
-                interrupt_count = 12000; //1,000 Hz
+                //interrupt_count = 12000; //1,000 Hz
+                dev->interrupt(interrupt, true);
             }
             ctrl = data;
             break;

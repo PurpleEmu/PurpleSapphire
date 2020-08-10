@@ -426,7 +426,7 @@ void arm_cpu::tick()
         printf("Opcode:%08x\nPC:%08x\n", opcode, true_r15);
         for(int i = 0; i < 15; i++)
         {
-            printf("R%d:%08x\n", i, get_register(i));
+            //printf("R%d:%08x\n", i, get_register(i));
         }
 
         bool condition = true;
@@ -722,6 +722,16 @@ void arm_cpu::tick()
                 just_branched = true;
             }
             else set_register(rd, value);
+        }
+        else if((opcode & 0x0c50'0000) == 0x0450'0000)
+        {
+            printf("[ARM] LDRB\n");
+            int rd = (opcode >> 12) & 0xf;
+            u32 addr = get_load_store_addr();
+            u32 data = rw(addr);
+            data >>= (addr & 3) << 3;
+            data &= 0xff;
+            set_register(rd, data);
         }
         else if((opcode & 0x0f10'0010) == 0x0e00'0010)
         {

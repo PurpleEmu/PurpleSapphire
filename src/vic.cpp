@@ -48,11 +48,13 @@ void vic::raise(bool fiq)
 {
     if(fiq)
     {
+        printf("FIQ raised\n");
         cpu->fiq = true;
         if(daisy) daisy->raise(fiq);
     }
     else
     {
+        printf("IRQ raised\n");
         cpu->irq = true;
         if(daisy)
         {
@@ -103,6 +105,9 @@ void vic::update()
 {
     irq_status = (raw_intr | soft_int) & int_enable & ~int_select;
     fiq_status = (raw_intr | soft_int) & int_enable & int_select;
+
+    if(irq_status) raise(0);
+    else lower(0);
 
     if(fiq_status) raise(1);
     else lower(1);
