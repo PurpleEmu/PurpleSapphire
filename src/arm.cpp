@@ -586,7 +586,7 @@ void arm_cpu::tick()
             u64 result64 = rn_val - shifter_operand;
             u32 result = (u32)result64;
 
-            cpsr.carry = result64 < 0x100000000;
+            cpsr.carry = result64 < 0x100000000ULL;
             cpsr.overflow = (rn_val ^ shifter_operand) & (rn_val ^ result) & 0x80000000;
             cpsr.zero = result == 0;
             cpsr.sign = result & 0x80000000;
